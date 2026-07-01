@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -14,6 +14,7 @@ from apps.api.schemas.auth import (
     RefreshTokenRequest, PasswordChange, UserUpdate
 )
 from apps.api.config import settings
+from apps.api.services.audit import write_audit_log
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -105,9 +106,17 @@ def signup(payload: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: UserLogin, db: Session = Depends(get_db)):
+def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
     user = db.query(User).filter(User.email == payload.email, User.is_active == True).first()
     if not user or not verify_password(payload.password, user.hashed_password):
+        write_audit_log(
+            db, action="login_failed", status="failure", user_email=payload.email,
+            ip_address=ip, user_agent=ua, detail="Invalid credentials",
+        )
+        db.commit()
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     access_token = create_access_token(user.id, user.role.value)
@@ -117,6 +126,10 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     rt = RefreshToken(token=raw_refresh, user_id=user.id, expires_at=expires)
     db.add(rt)
     user.last_login = datetime.now(timezone.utc)
+    write_audit_log(
+        db, action="login", status="success", user_id=user.id, user_email=user.email,
+        role=user.role.value, ip_address=ip, user_agent=ua,
+    )
     db.commit()
 
     return TokenResponse(
@@ -158,10 +171,17 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/logout", status_code=204)
-def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+def logout(payload: RefreshTokenRequest, request: Request, db: Session = Depends(get_db)):
     rt = db.query(RefreshToken).filter(RefreshToken.token == payload.refresh_token).first()
     if rt:
         rt.revoked = True
+        user = db.query(User).filter(User.id == rt.user_id).first()
+        write_audit_log(
+            db, action="logout", status="success",
+            user_id=rt.user_id, user_email=user.email if user else None,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
         db.commit()
 
 
@@ -200,3 +220,29 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     return db.query(User).offset(skip).limit(limit).all()
+
+
+@router.patch("/users/{user_id}/role", response_model=UserResponse)
+def change_user_role(
+    user_id: str,
+    role: UserRole,
+    request: Request,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    old_role = target.role.value
+    target.role = role
+    write_audit_log(
+        db, action="role_change", status="success", user_id=admin.id, user_email=admin.email,
+        role=admin.role.value, resource=f"user:{user_id}",
+        old_value={"role": old_role}, new_value={"role": role.value},
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(target)
+    return target

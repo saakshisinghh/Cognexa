@@ -115,7 +115,7 @@ def split_text(
 
     # Detect page boundaries (form feeds or "Page N" markers)
     page_texts: list[tuple[int, str]] = []
-    raw_pages = re.split(r"\f|(?i)(?:^|\n)(?:page\s+\d+\s*\n)", text)
+    raw_pages = re.split(r"\f|(?:^|\n)(?:page\s+\d+\s*\n)", text, flags=re.IGNORECASE)
     for idx, page_text in enumerate(raw_pages, start=1):
         if page_text.strip():
             page_texts.append((idx, page_text))

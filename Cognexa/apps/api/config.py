@@ -56,6 +56,29 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # ── Phase 2: Redis / Celery ──────────────────────────────────────────────
+    REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_MAX_CONNECTIONS: int = 50
+    REDIS_SOCKET_TIMEOUT: int = 5
+    REDIS_SOCKET_CONNECT_TIMEOUT: int = 5
+    REDIS_RETRY_ON_TIMEOUT: bool = True
+    REDIS_HEALTH_CHECK_INTERVAL: int = 30
+
+    CELERY_BROKER_URL: str = "redis://redis:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/2"
+    CELERY_TASK_DEFAULT_QUEUE: str = "default"
+    CELERY_WORKER_CONCURRENCY: int = 4
+    CELERY_TASK_MAX_RETRIES: int = 3
+    CELERY_TASK_RETRY_BACKOFF: int = 5            # seconds, exponential base
+    CELERY_TASK_RETRY_BACKOFF_MAX: int = 600      # cap backoff at 10 minutes
+    CELERY_TASK_SOFT_TIME_LIMIT: int = 600
+    CELERY_TASK_TIME_LIMIT: int = 900
+    CELERY_RESULT_EXPIRES: int = 86400            # 24h
+
+    # Temp file cleanup
+    TEMP_FILE_MAX_AGE_HOURS: int = 24
+    FAILED_JOB_RETENTION_DAYS: int = 30
+
     class Config:
         env_file = ".env"
         case_sensitive = True

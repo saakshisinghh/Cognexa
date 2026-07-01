@@ -224,18 +224,33 @@ async def upload_document(
         status=DocumentStatus.pending,
     )
     db.add(doc)
+    db.flush()
+
+    # ── Phase 2: create a ProcessingJob and hand off to Celery instead of
+    # running the pipeline inline. Falls back to the Phase 1 BackgroundTasks
+    # path if Celery/Redis is unreachable, so local dev without `docker
+    # compose up redis celery_worker` still works.
+    from apps.api.models import ProcessingJob, JobStatus
+    job = ProcessingJob(document_id=doc_id, user_id=current_user.id, status=JobStatus.pending)
+    db.add(job)
     db.commit()
 
-    # Queue background processing
-    background_tasks.add_task(
-        _process_document, doc_id, file_bytes, mime_type, file.filename or "unknown"
-    )
+    job_id = job.id
+    try:
+        from apps.api.workers.document_tasks import queue_document_pipeline
+        queue_document_pipeline(job_id, doc_id, file_bytes, mime_type, file.filename or "unknown")
+    except Exception as e:
+        logger.warning(f"Celery enqueue failed, falling back to inline background task: {e}")
+        background_tasks.add_task(
+            _process_document, doc_id, file_bytes, mime_type, file.filename or "unknown"
+        )
 
     return UploadResponse(
         document_id=doc_id,
         filename=file.filename or "unknown",
         status="processing",
         message="Document uploaded successfully. Processing started.",
+        job_id=job_id,
     )
 
 
@@ -444,15 +459,27 @@ def reprocess_document(
     doc.version += 1
     db.commit()
 
-    background_tasks.add_task(
-        _process_document, document_id, file_bytes, doc.mime_type, doc.original_filename
-    )
+    from apps.api.models import ProcessingJob, JobStatus
+    job = ProcessingJob(document_id=document_id, user_id=current_user.id, status=JobStatus.pending)
+    db.add(job)
+    db.commit()
+    job_id = job.id
+
+    try:
+        from apps.api.workers.document_tasks import queue_document_pipeline
+        queue_document_pipeline(job_id, document_id, file_bytes, doc.mime_type, doc.original_filename)
+    except Exception as e:
+        logger.warning(f"Celery enqueue failed on reprocess, falling back to inline task: {e}")
+        background_tasks.add_task(
+            _process_document, document_id, file_bytes, doc.mime_type, doc.original_filename
+        )
 
     return UploadResponse(
         document_id=document_id,
         filename=doc.original_filename,
         status="processing",
         message="Reprocessing started.",
+        job_id=job_id,
     )
 
 

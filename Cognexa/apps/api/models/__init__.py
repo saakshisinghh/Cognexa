@@ -155,3 +155,10 @@ class Message(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("Conversation", back_populates="messages")
+# ─── Phase 2: Audit Logging & Async Processing ───────────────────────────────
+from apps.api.models.audit_log import (
+    AuditLog, AuditAction, AuditStatus,
+    ProcessingJob, JobStatus, JobStep,
+    TaskExecution, TaskState,
+    TaskMetrics, WorkerStatus, QueueStatistics,
+)

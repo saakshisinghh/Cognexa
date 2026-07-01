@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/auth";
 import toast from "react-hot-toast";
 import {
   LayoutDashboard, FileText, Search, MessageSquare, Factory,
-  Settings, LogOut, Zap, ChevronRight, User
+  Settings, LogOut, Zap, ChevronRight, User, Activity, ShieldCheck
 } from "lucide-react";
 
 const nav = [
@@ -17,6 +17,11 @@ const nav = [
   { href: "/search", icon: Search, label: "Search" },
   { href: "/copilot", icon: MessageSquare, label: "Copilot" },
   { href: "/assets", icon: Factory, label: "Assets" },
+];
+
+const adminNav = [
+  { href: "/processing", icon: Activity, label: "Processing" },
+  { href: "/audit-logs", icon: ShieldCheck, label: "Audit Logs" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -68,6 +73,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {(user?.role === "admin" || user?.role === "engineer") && (
+            <>
+              <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Operations
+              </p>
+              {adminNav.map((item) => {
+                const active = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group",
+                      active
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    )}
+                  >
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    <span className="flex-1">{item.label}</span>
+                    {active && <ChevronRight className="w-3 h-3 opacity-50" />}
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* User section */}

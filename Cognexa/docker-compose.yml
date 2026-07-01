@@ -72,6 +72,25 @@ services:
     networks:
       - indusmind_net
 
+  # ─── Redis (Celery broker + result backend) ──────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: indusmind_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - indusmind_net
+
   # ─── FastAPI Backend ──────────────────────────────────────────────────────────
   api:
     build:
@@ -89,12 +108,17 @@ services:
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     depends_on:
       postgres:
         condition: service_healthy
       weaviate:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - model_cache:/home/indusmind/.cache
@@ -106,6 +130,116 @@ services:
       timeout: 15s
       retries: 5
       start_period: 90s
+
+  # ─── Celery Worker ────────────────────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: indusmind_celery_worker
+    restart: unless-stopped
+    command: >
+      celery -A apps.api.workers.celery_app worker
+      --loglevel=info
+      --concurrency=4
+      -Q documents,ocr,embedding,cleanup,default
+      -n worker@%h
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://indusmind:indusmind@postgres:5432/indusmind
+      WEAVIATE_URL: http://weaviate:8080
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - model_cache:/home/indusmind/.cache
+    networks:
+      - indusmind_net
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A apps.api.workers.celery_app inspect ping -d worker@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+
+  # ─── Celery Beat (scheduler for cleanup / recovery / metrics tasks) ──────────
+  celery_beat:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: indusmind_celery_beat
+    restart: unless-stopped
+    command: celery -A apps.api.workers.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://indusmind:indusmind@postgres:5432/indusmind
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - indusmind_net
+
+  # ─── Flower (Celery monitoring UI, optional) ─────────────────────────────────
+  flower:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: indusmind_flower
+    restart: unless-stopped
+    command: celery -A apps.api.workers.celery_app flower --port=5555
+    env_file:
+      - .env
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - indusmind_net
+    profiles:
+      - tools
+
+  # ─── Redis Commander (optional Redis GUI) ────────────────────────────────────
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: indusmind_redis_commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - indusmind_net
+    profiles:
+      - tools
 
   # ─── Next.js Frontend ─────────────────────────────────────────────────────────
   web:
@@ -139,6 +273,8 @@ volumes:
     name: indusmind_minio_data
   model_cache:
     name: indusmind_model_cache
+  redis_data:
+    name: indusmind_redis_data
 
 networks:
   indusmind_net:

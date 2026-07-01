@@ -151,7 +151,112 @@ export interface MessageSource {
   score: number;
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// ─── Phase 2: Audit ───────────────────────────────────────────────────────────
+
+export type AuditAction =
+  | "login" | "logout" | "login_failed" | "upload" | "delete" | "rename"
+  | "update" | "search" | "chat_query" | "download" | "role_change"
+  | "asset_update" | "settings_change" | "api_error" | "auth_failure"
+  | "reprocess" | "retry_task" | "cancel_task";
+
+export type AuditStatus = "success" | "failure" | "denied";
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  user_id: string | null;
+  user_email: string | null;
+  role: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  resource: string | null;
+  action: AuditAction;
+  status: AuditStatus;
+  old_value: unknown;
+  new_value: unknown;
+  duration_ms: number | null;
+  correlation_id: string | null;
+  detail: string | null;
+}
+
+export interface AuditFilters {
+  action?: string;
+  status?: string;
+  user_id?: string;
+  resource?: string;
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+// ─── Phase 2: Processing Jobs ─────────────────────────────────────────────────
+
+export type JobStatus = "pending" | "queued" | "processing" | "completed" | "failed" | "cancelled";
+export type JobStep =
+  | "created" | "ocr" | "entity_extraction" | "chunking"
+  | "embedding" | "vector_storage" | "finalizing" | "done";
+
+export interface TaskExecution {
+  id: string;
+  celery_task_id: string;
+  task_name: string;
+  queue: string;
+  state: string;
+  attempt: number;
+  error_message: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+}
+
+export interface ProcessingJob {
+  id: string;
+  document_id: string;
+  status: JobStatus;
+  current_step: JobStep;
+  progress_percent: number;
+  celery_task_id: string | null;
+  retry_count: number;
+  max_retries: number;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_seconds: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcessingJobDetail extends ProcessingJob {
+  tasks: TaskExecution[];
+}
+
+export interface QueueMetrics {
+  queue_name: string;
+  pending: number;
+  active: number;
+  scheduled: number;
+  reserved: number;
+}
+
+export interface WorkerHealth {
+  worker_name: string;
+  status: string;
+  active_tasks: number;
+  processed_tasks: number;
+  concurrency: number;
+  last_heartbeat: string | null;
+}
+
+export interface ProcessingStats {
+  running_jobs: number;
+  completed_jobs: number;
+  failed_jobs: number;
+  retry_queue: number;
+  avg_processing_time_seconds: number;
+  redis: { status: string; latency_ms?: number; used_memory_human?: string };
+  queues: QueueMetrics[];
+  workers: WorkerHealth[];
+}
 
 export interface DashboardStats {
   total_documents: number;

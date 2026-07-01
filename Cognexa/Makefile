@@ -92,6 +92,27 @@ test:
 test-api:
 	docker compose exec api python -m pytest apps/api/tests/ -v --tb=short
 
+# ─── Phase 2: Async Processing ────────────────────────────────────────────────
+
+logs-worker:
+	docker compose logs -f celery_worker
+
+logs-beat:
+	docker compose logs -f celery_beat
+
+restart-worker:
+	docker compose restart celery_worker celery_beat
+
+flower:
+	docker compose --profile tools up -d flower
+	@echo "Flower UI: http://localhost:5555"
+
+redis-cli:
+	docker compose exec redis redis-cli
+
+queue-status:
+	docker compose exec celery_worker celery -A apps.api.workers.celery_app inspect active
+
 # ─── Code Quality ─────────────────────────────────────────────────────────────
 
 lint:

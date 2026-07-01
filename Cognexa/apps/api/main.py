@@ -1,11 +1,12 @@
 """
 INDUS MIND API — FastAPI application entrypoint.
-Production-grade monolith for Phase 1.
+Production-grade monolith for Phase 1 + Phase 2 (async processing & audit).
 """
 from __future__ import annotations
 import logging
 import sys
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Depends
@@ -17,7 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func as sqlfunc, text
 
 from apps.api.config import settings
-from apps.api.db import engine, get_db
+from apps.api.db import engine, get_db, SessionLocal
 from apps.api.models import Base, Document, Asset, User, Conversation, DocumentStatus
 
 logging.basicConfig(
@@ -54,12 +55,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Embedding warmup failed: {e}")
 
+    try:
+        from apps.api.redis_client import get_redis
+        get_redis().ping()
+        logger.info("Redis connection verified")
+    except Exception as e:
+        logger.warning(f"Redis check failed (Celery features degraded): {e}")
+
     logger.info("INDUS MIND API ready")
     yield
 
     try:
         from apps.api.weaviate_client import close_weaviate_client
         close_weaviate_client()
+    except Exception:
+        pass
+    try:
+        from apps.api.redis_client import close_redis_pool
+        close_redis_pool()
     except Exception:
         pass
     logger.info("INDUS MIND API shutdown complete")
@@ -99,6 +112,66 @@ async def request_logging(request: Request, call_next):
     return response
 
 
+@app.middleware("http")
+async def audit_and_correlation_middleware(request: Request, call_next):
+    """
+    Phase 2: stamps every request with a correlation ID (propagated to clients
+    via X-Correlation-ID and available to routers/workers via request.state),
+    and automatically writes an AuditLog row for mutating/sensitive endpoints
+    classified in services/audit.classify_action. Explicit audit calls inside
+    routers (login, role_change, etc.) take precedence and are not duplicated
+    here since those actions aren't in the classification map.
+    """
+    correlation_id = request.headers.get("x-correlation-id") or str(uuid.uuid4())
+    request.state.correlation_id = correlation_id
+    start = time.time()
+
+    response = await call_next(request)
+    duration_ms = round((time.time() - start) * 1000, 2)
+    response.headers["X-Correlation-ID"] = correlation_id
+
+    action = None
+    try:
+        from apps.api.services.audit import classify_action
+        action = classify_action(request.method, request.url.path)
+    except Exception:
+        pass
+
+    if action:
+        try:
+            from apps.api.services.audit import write_audit_log
+            user_id = None
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                try:
+                    from apps.api.routers.auth import decode_access_token
+                    payload = decode_access_token(auth_header.split(" ", 1)[1])
+                    user_id = payload.get("sub")
+                except Exception:
+                    user_id = None
+            db = SessionLocal()
+            try:
+                write_audit_log(
+                    db,
+                    action=action,
+                    status="success" if response.status_code < 400 else "failure",
+                    user_id=user_id,
+                    ip_address=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    resource=request.url.path,
+                    duration_ms=duration_ms,
+                    correlation_id=correlation_id,
+                    detail=f"{request.method} {request.url.path} -> {response.status_code}",
+                )
+                db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Audit middleware failed to write log: {e}")
+
+    return response
+
+
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_error_handler(request: Request, exc: SQLAlchemyError):
     logger.error(f"Database error on {request.url.path}: {exc}")
@@ -110,13 +183,15 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-from apps.api.routers import auth, documents, search, copilot, assets
+from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
+app.include_router(audit.router, prefix="/api/v1")
+app.include_router(jobs.router, prefix="/api/v1")
 
 
 @app.get("/api/health", tags=["Health"])
@@ -150,6 +225,20 @@ async def health_check():
         services["minio"] = "ok"
     except Exception as e:
         services["minio"] = f"error: {str(e)}"
+
+    try:
+        from apps.api.redis_client import redis_health_check
+        redis_status = redis_health_check()
+        services["redis"] = redis_status.get("status", "error")
+    except Exception as e:
+        services["redis"] = f"error: {str(e)}"
+
+    try:
+        from apps.api.workers.celery_app import celery_app
+        ping = celery_app.control.ping(timeout=1.0)
+        services["celery_workers"] = "ok" if ping else "no_workers_online"
+    except Exception as e:
+        services["celery_workers"] = f"error: {str(e)}"
 
     all_ok = all(v == "ok" for v in services.values())
     return {
