@@ -100,8 +100,8 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
           flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
           transition-colors border
           ${pinnedAssetTag
-            ? "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
-            : "bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200"
+            ? "bg-primary/10 border-primary/20 text-primary hover:bg-primary/15"
+            : "bg-accent border-border text-muted-foreground hover:bg-accent/70"
           }
           disabled:opacity-40 disabled:cursor-not-allowed
         `}
@@ -115,7 +115,7 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
         </span>
         {pinnedAssetTag && (
           <span
-            className="text-blue-400 hover:text-blue-700"
+            className="text-primary/60 hover:text-primary"
             onClick={(e) => { e.stopPropagation(); handlePin(null); }}
             title="Remove pin"
             role="button"
@@ -132,13 +132,13 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
         <div
           className="
             absolute top-full left-0 mt-1 w-72 z-50
-            bg-white border border-gray-200 rounded-xl shadow-xl
+            bg-popover border border-border rounded-xl shadow-xl
             overflow-hidden
           "
           role="dialog"
           aria-label="Select asset context"
         >
-          <div className="p-2 border-b border-gray-100">
+          <div className="p-2 border-b border-border">
             <input
               ref={inputRef}
               type="text"
@@ -146,8 +146,8 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search asset tag (P-1045, K-201…)"
               className="
-                w-full px-3 py-2 text-sm rounded-lg border border-gray-200
-                focus:outline-none focus:ring-2 focus:ring-indigo-400
+                w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground
+                focus:outline-none focus:ring-2 focus:ring-primary
               "
               role="searchbox"
             />
@@ -163,7 +163,7 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
               <li>
                 <button
                   onClick={() => handlePin(null)}
-                  className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50"
+                  className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
                 >
                   ✕ Remove asset context
                 </button>
@@ -171,11 +171,11 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
             )}
 
             {loading && (
-              <li className="px-3 py-2 text-sm text-gray-400">Searching…</li>
+              <li className="px-3 py-2 text-sm text-muted-foreground">Searching…</li>
             )}
 
             {!loading && query && results.length === 0 && (
-              <li className="px-3 py-2 text-sm text-gray-400">No assets found.</li>
+              <li className="px-3 py-2 text-sm text-muted-foreground">No assets found.</li>
             )}
 
             {results.map((asset) => (
@@ -183,13 +183,13 @@ export function AssetContextBadge({ sessionId, pinnedAssetTag, onPinChanged }: P
                 <button
                   onClick={() => handlePin(asset)}
                   className={`
-                    w-full text-left px-3 py-2 text-sm hover:bg-indigo-50
-                    ${asset.tag_number === pinnedAssetTag ? "bg-indigo-50 font-semibold" : ""}
+                    w-full text-left px-3 py-2 text-sm hover:bg-primary/10
+                    ${asset.tag_number === pinnedAssetTag ? "bg-primary/10 font-semibold" : ""}
                   `}
                 >
-                  <span className="font-mono text-indigo-700 font-semibold">{asset.tag_number}</span>
+                  <span className="font-mono text-primary font-semibold">{asset.tag_number}</span>
                   {" "}
-                  <span className="text-gray-500">
+                  <span className="text-muted-foreground">
                     {asset.asset_name}
                     {asset.asset_type && ` · ${asset.asset_type}`}
                   </span>

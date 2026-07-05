@@ -70,7 +70,7 @@ export function QueryInputBar({
     <div
       className="
         flex flex-col gap-1 px-4 py-3
-        border-t border-gray-200 bg-white
+        border-t border-border bg-card
       "
     >
       <div
@@ -78,8 +78,8 @@ export function QueryInputBar({
           flex items-end gap-2 rounded-xl border px-3 py-2
           transition-colors
           ${isEffectivelyDisabled
-            ? "border-gray-200 bg-gray-50"
-            : "border-gray-300 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100"
+            ? "border-border bg-muted/30"
+            : "border-border bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20"
           }
         `}
       >
@@ -95,9 +95,9 @@ export function QueryInputBar({
           aria-multiline="true"
           className="
             flex-1 resize-none bg-transparent text-sm leading-relaxed
-            text-gray-800 placeholder-gray-400
+            text-foreground placeholder-muted-foreground
             focus:outline-none
-            disabled:text-gray-400 disabled:cursor-not-allowed
+            disabled:text-muted-foreground disabled:cursor-not-allowed
             max-h-36 overflow-y-auto
           "
         />
@@ -110,9 +110,9 @@ export function QueryInputBar({
           className="
             flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center
             transition-colors
-            bg-indigo-600 text-white
-            hover:bg-indigo-700 active:bg-indigo-800
-            disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed
+            bg-primary text-primary-foreground
+            hover:bg-primary/90 active:bg-primary/80
+            disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed
           "
         >
           {isStreaming ? (
@@ -130,12 +130,12 @@ export function QueryInputBar({
 
       {/* Helpers row */}
       <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] text-gray-400">
+        <span className="text-[10px] text-muted-foreground">
           Enter to send · Shift+Enter for newline
         </span>
         {showCounter && (
           <span
-            className={`text-[10px] ${charsLeft < 50 ? "text-red-500 font-semibold" : "text-gray-400"}`}
+            className={`text-[10px] ${charsLeft < 50 ? "text-destructive font-semibold" : "text-muted-foreground"}`}
           >
             {charsLeft} left
           </span>

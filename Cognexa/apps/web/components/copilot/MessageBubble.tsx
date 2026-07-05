@@ -30,7 +30,7 @@ function TypingDots() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce"
+          className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce"
           style={{ animationDelay: `${i * 150}ms` }}
         />
       ))}
@@ -54,7 +54,7 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
         <div
           className="
             max-w-[75%] px-4 py-2.5 rounded-2xl rounded-tr-sm
-            bg-blue-600 text-white text-sm leading-relaxed
+            bg-primary text-primary-foreground text-sm leading-relaxed
           "
         >
           {message.content}
@@ -67,7 +67,7 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
   return (
     <div className="flex justify-start mb-4">
       {/* Avatar */}
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold mr-3 mt-0.5">
+      <div className="flex-shrink-0 w-8 h-8 rounded-full indus-gradient flex items-center justify-center text-white text-xs font-bold mr-3 mt-0.5">
         IM
       </div>
 
@@ -77,8 +77,8 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
           className={`
             px-4 py-3 rounded-2xl rounded-tl-sm text-sm leading-relaxed
             ${message.hasError
-              ? "bg-red-50 border border-red-200 text-red-700"
-              : "bg-white border border-gray-200 text-gray-800 shadow-sm"
+              ? "bg-destructive/10 border border-destructive/30 text-destructive"
+              : "bg-card border border-border text-foreground shadow-sm"
             }
           `}
         >
@@ -94,7 +94,7 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
               {/* Content — whitespace preserved for multi-line answers */}
               <div className="whitespace-pre-wrap break-words">{message.content}</div>
               {message.isStreaming && (
-                <span className="inline-block w-0.5 h-4 bg-gray-400 animate-pulse ml-0.5 align-text-bottom" />
+                <span className="inline-block w-0.5 h-4 bg-muted-foreground animate-pulse ml-0.5 align-text-bottom" />
               )}
             </>
           )}
@@ -124,15 +124,15 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
             {/* Feedback buttons */}
             {message.content && (
               <div className="flex items-center gap-2 mt-2.5">
-                <span className="text-[10px] text-gray-400">Was this helpful?</span>
+                <span className="text-[10px] text-muted-foreground">Was this helpful?</span>
                 <button
                   onClick={() => handleFeedback("positive")}
                   disabled={!!feedback}
                   className={`
                     text-sm px-2 py-0.5 rounded transition-colors
                     ${feedback === "positive"
-                      ? "text-emerald-600 bg-emerald-50"
-                      : "text-gray-400 hover:text-emerald-600 hover:bg-emerald-50"
+                      ? "text-emerald-400 bg-emerald-500/10"
+                      : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
                     }
                     disabled:cursor-default
                   `}
@@ -147,8 +147,8 @@ export function MessageBubble({ message, onFeedback, onOpenDocument }: Props) {
                   className={`
                     text-sm px-2 py-0.5 rounded transition-colors
                     ${feedback === "negative"
-                      ? "text-red-600 bg-red-50"
-                      : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                      ? "text-destructive bg-destructive/10"
+                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                     }
                     disabled:cursor-default
                   `}

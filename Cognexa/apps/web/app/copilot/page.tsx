@@ -37,6 +37,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { ChatMessage, CitationItem, ConfidencePayload, ConflictFlag } from "@/lib/types/copilot";
 import { streamChat, getSessionDetail, submitFeedback } from "@/lib/api/copilot";
 
+import AppLayout from "@/components/layout/AppLayout";
 import { ConversationSidebar } from "@/components/copilot/ConversationSidebar";
 import { MessageBubble } from "@/components/copilot/MessageBubble";
 import { QueryInputBar } from "@/components/copilot/QueryInputBar";
@@ -243,108 +244,110 @@ export default function CopilotPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Left sidebar */}
-      <ConversationSidebar
-        activeSessionId={sessionId}
-        onSelectSession={handleSelectSession}
-        onNewConversation={handleNewConversation}
-        refreshToken={sidebarRefreshToken}
-      />
+    <AppLayout>
+      <div className="flex h-full bg-background overflow-hidden">
+        {/* Left sidebar */}
+        <ConversationSidebar
+          activeSessionId={sessionId}
+          onSelectSession={handleSelectSession}
+          onNewConversation={handleNewConversation}
+          refreshToken={sidebarRefreshToken}
+        />
 
-      {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base font-bold text-gray-900">Industrial Copilot</h1>
-            <AssetContextBadge
-              sessionId={sessionId}
-              pinnedAssetTag={pinnedAssetTag}
-              onPinChanged={setPinnedAssetTag}
+        {/* Main chat area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-base font-bold text-foreground">Industrial Copilot</h1>
+              <AssetContextBadge
+                sessionId={sessionId}
+                pinnedAssetTag={pinnedAssetTag}
+                onPinChanged={setPinnedAssetTag}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Source count badge — shown only when last assistant message has citations */}
+              {(() => {
+                const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && !m.isStreaming);
+                const count = lastAssistant?.citations?.length ?? 0;
+                return count > 0 ? (
+                  <span className="text-xs text-muted-foreground bg-accent px-2.5 py-1 rounded-full">
+                    {count} source{count !== 1 ? "s" : ""}
+                  </span>
+                ) : null;
+              })()}
+
+              {/* Export button */}
+              {messages.length > 0 && (
+                <button
+                  onClick={handleExport}
+                  className="text-xs text-muted-foreground hover:text-foreground border border-border px-2.5 py-1.5 rounded-lg hover:bg-accent transition-colors"
+                  title="Export conversation"
+                >
+                  ↓ Export
+                </button>
+              )}
+            </div>
+          </header>
+
+          {/* Messages area */}
+          <main className="flex-1 overflow-y-auto px-4 py-4">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <div className="w-16 h-16 rounded-2xl indus-gradient flex items-center justify-center text-white text-2xl font-bold mb-4">
+                  IM
+                </div>
+                <h2 className="text-xl font-semibold text-foreground mb-2">
+                  Industrial Memory Copilot
+                </h2>
+                <p className="text-muted-foreground text-sm max-w-md leading-relaxed">
+                  Ask anything about your assets, incidents, procedures, or compliance records.
+                  I'll search across all your documents and give you cited answers.
+                </p>
+                <div className="mt-6 grid grid-cols-1 gap-2 w-full max-w-sm">
+                  {[
+                    "What caused the last seal failure on P-1045?",
+                    "Show similar pump failures in Unit 3 in the last 2 years",
+                    "What does our procedure say about compressor K-201 maintenance?",
+                  ].map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => { setQuery(suggestion); }}
+                      className="text-left text-sm text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 hover:bg-primary/15 transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    onFeedback={handleFeedback}
+                    onOpenDocument={handleOpenDocument}
+                  />
+                ))}
+                <div ref={messagesEndRef} />
+              </>
+            )}
+          </main>
+
+          {/* Input bar — pinned to bottom */}
+          <div className="flex-shrink-0">
+            <QueryInputBar
+              value={query}
+              onChange={setQuery}
+              onSubmit={handleSubmit}
+              isStreaming={isStreaming}
             />
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Source count badge — shown only when last assistant message has citations */}
-            {(() => {
-              const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant" && !m.isStreaming);
-              const count = lastAssistant?.citations?.length ?? 0;
-              return count > 0 ? (
-                <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-                  {count} source{count !== 1 ? "s" : ""}
-                </span>
-              ) : null;
-            })()}
-
-            {/* Export button */}
-            {messages.length > 0 && (
-              <button
-                onClick={handleExport}
-                className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
-                title="Export conversation"
-              >
-                ↓ Export
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* Messages area */}
-        <main className="flex-1 overflow-y-auto px-4 py-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-bold mb-4">
-                IM
-              </div>
-              <h2 className="text-xl font-semibold text-gray-800 mb-2">
-                Industrial Memory Copilot
-              </h2>
-              <p className="text-gray-500 text-sm max-w-md leading-relaxed">
-                Ask anything about your assets, incidents, procedures, or compliance records.
-                I'll search across all your documents and give you cited answers.
-              </p>
-              <div className="mt-6 grid grid-cols-1 gap-2 w-full max-w-sm">
-                {[
-                  "What caused the last seal failure on P-1045?",
-                  "Show similar pump failures in Unit 3 in the last 2 years",
-                  "What does our procedure say about compressor K-201 maintenance?",
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => { setQuery(suggestion); }}
-                    className="text-left text-sm text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 hover:bg-indigo-100 transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <>
-              {messages.map((message) => (
-                <MessageBubble
-                  key={message.id}
-                  message={message}
-                  onFeedback={handleFeedback}
-                  onOpenDocument={handleOpenDocument}
-                />
-              ))}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </main>
-
-        {/* Input bar — pinned to bottom */}
-        <div className="flex-shrink-0">
-          <QueryInputBar
-            value={query}
-            onChange={setQuery}
-            onSubmit={handleSubmit}
-            isStreaming={isStreaming}
-          />
         </div>
       </div>
-    </div>
+    </AppLayout>
   );
 }

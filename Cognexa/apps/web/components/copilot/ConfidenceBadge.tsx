@@ -10,9 +10,9 @@
 import type { ConfidencePayload } from "@/lib/types/copilot";
 
 const LEVEL_STYLES: Record<string, { bg: string; text: string; dot: string; label: string }> = {
-  high:   { bg: "bg-emerald-50",  text: "text-emerald-700", dot: "bg-emerald-500", label: "HIGH" },
-  medium: { bg: "bg-amber-50",    text: "text-amber-700",   dot: "bg-amber-400",   label: "MEDIUM" },
-  low:    { bg: "bg-red-50",      text: "text-red-700",     dot: "bg-red-400",     label: "LOW" },
+  high:   { bg: "bg-emerald-500/10",  text: "text-emerald-400", dot: "bg-emerald-500", label: "HIGH" },
+  medium: { bg: "bg-amber-500/10",    text: "text-amber-400",   dot: "bg-amber-400",   label: "MEDIUM" },
+  low:    { bg: "bg-red-500/10",      text: "text-red-400",     dot: "bg-red-400",     label: "LOW" },
 };
 
 interface Props {
@@ -43,7 +43,7 @@ export function ConfidenceBadge({ confidence }: Props) {
       <div
         className="
           pointer-events-none absolute bottom-full left-0 mb-2 w-72
-          bg-gray-900 text-gray-100 text-xs rounded-lg px-3 py-2 shadow-xl
+          bg-popover text-popover-foreground text-xs rounded-lg px-3 py-2 shadow-xl border border-border
           opacity-0 group-hover:opacity-100 transition-opacity duration-150
           z-50 leading-relaxed
         "
@@ -51,7 +51,7 @@ export function ConfidenceBadge({ confidence }: Props) {
       >
         {confidence.explanation}
         <div
-          className="absolute top-full left-4 border-4 border-transparent border-t-gray-900"
+          className="absolute top-full left-4 border-4 border-transparent border-t-popover"
           aria-hidden
         />
       </div>

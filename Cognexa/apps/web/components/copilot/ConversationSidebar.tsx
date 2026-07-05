@@ -54,19 +54,19 @@ export function ConversationSidebar({
     <aside
       className="
         w-64 flex-shrink-0 h-full flex flex-col
-        border-r border-gray-200 bg-gray-50
+        border-r border-border bg-card
       "
       aria-label="Conversation history"
     >
       {/* New conversation button */}
-      <div className="p-3 border-b border-gray-200">
+      <div className="p-3 border-b border-border">
         <button
           onClick={onNewConversation}
           className="
             w-full flex items-center justify-center gap-2
             px-3 py-2 rounded-lg text-sm font-semibold
-            bg-indigo-600 text-white
-            hover:bg-indigo-700 active:bg-indigo-800
+            bg-primary text-primary-foreground
+            hover:bg-primary/90 active:bg-primary/80
             transition-colors
           "
         >
@@ -77,17 +77,17 @@ export function ConversationSidebar({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto py-2">
         {loading && (
-          <div className="px-4 py-6 text-center text-sm text-gray-400">
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             Loading history…
           </div>
         )}
 
         {error && (
-          <div className="px-4 py-3 text-xs text-red-500">{error}</div>
+          <div className="px-4 py-3 text-xs text-destructive">{error}</div>
         )}
 
         {!loading && !error && sessions.length === 0 && (
-          <div className="px-4 py-6 text-center text-sm text-gray-400">
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             No conversations yet.
           </div>
         )}
@@ -102,8 +102,8 @@ export function ConversationSidebar({
                 w-full text-left px-3 py-2.5 rounded-lg mx-1
                 transition-colors group
                 ${isActive
-                  ? "bg-indigo-100 border border-indigo-200"
-                  : "hover:bg-gray-100 border border-transparent"
+                  ? "bg-primary/10 border border-primary/20"
+                  : "hover:bg-accent border border-transparent"
                 }
               `}
               aria-current={isActive ? "page" : undefined}
@@ -112,7 +112,7 @@ export function ConversationSidebar({
               <p
                 className={`
                   text-sm truncate font-medium
-                  ${isActive ? "text-indigo-800" : "text-gray-700 group-hover:text-gray-900"}
+                  ${isActive ? "text-primary" : "text-foreground/80 group-hover:text-foreground"}
                 `}
               >
                 {session.title ?? "New conversation"}
@@ -124,17 +124,17 @@ export function ConversationSidebar({
                   <span
                     className="
                       text-[10px] px-1.5 py-0.5 rounded
-                      bg-blue-100 text-blue-700 font-semibold flex-shrink-0
+                      bg-primary/15 text-primary font-semibold flex-shrink-0
                     "
                     title={`Pinned asset: ${session.pinned_asset_tag}`}
                   >
                     📌 {session.pinned_asset_tag}
                   </span>
                 )}
-                <span className="text-[10px] text-gray-400 truncate">
+                <span className="text-[10px] text-muted-foreground truncate">
                   {timeAgo(session.last_active_at)}
                 </span>
-                <span className="text-[10px] text-gray-300 flex-shrink-0">
+                <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">
                   {session.message_count} msgs
                 </span>
               </div>
