@@ -128,3 +128,19 @@ def delete_document_embeddings(document_id: str, weaviate_client) -> int:
     except Exception as e:
         logger.error(f"Failed to delete embeddings for {document_id}: {e}")
         return 0
+
+def encode_query(text: str) -> list[float]:
+    """
+    Encode a single query using the shared SentenceTransformer model.
+    Returns a normalized embedding vector.
+    """
+    model = _get_model()
+
+    embedding = model.encode(
+        text,
+        normalize_embeddings=True,
+        convert_to_numpy=True,
+        show_progress_bar=False,
+    )
+
+    return embedding.tolist()

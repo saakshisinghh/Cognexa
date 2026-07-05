@@ -91,6 +91,29 @@ services:
     networks:
       - indusmind_net
 
+  # ─── Neo4j (Knowledge Graph) ──────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.23-community
+    container_name: indusmind_neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/indusmind
+      NEO4J_dbms_memory_pagecache_size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - indusmind_net
+
   # ─── FastAPI Backend ──────────────────────────────────────────────────────────
   api:
     build:
@@ -111,6 +134,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: indusmind
     depends_on:
       postgres:
         condition: service_healthy
@@ -119,6 +145,8 @@ services:
       minio:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      neo4j:
         condition: service_healthy
     volumes:
       - model_cache:/home/indusmind/.cache
@@ -200,6 +228,20 @@ services:
         condition: service_healthy
     networks:
       - indusmind_net
+    # FIX (issue #7 — "Celery Beat container is unhealthy"):
+    # This service is built from apps/api/Dockerfile, whose baked-in
+    # HEALTHCHECK runs `curl -f http://localhost:8000/api/health`, which
+    # only exists on the FastAPI `api` service. `celery beat` doesn't serve
+    # HTTP at all, so it silently inherited that broken check (celery_worker
+    # below already overrides it with `inspect ping`; beat had no override).
+    # `beat` has nothing to probe over HTTP, so instead confirm the beat
+    # process is running and has written its schedule file.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   # ─── Flower (Celery monitoring UI, optional) ─────────────────────────────────
   flower:
@@ -251,7 +293,18 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # NEXT_PUBLIC_API_URL is inlined into the CLIENT bundle and used by
+      # the browser, which reaches the API via the published host port.
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      # FIX (issue #8 / Copilot+Graph "doesn't work"): next.config.js's
+      # server-side rewrites() also read NEXT_PUBLIC_API_URL, but those
+      # rewrites run inside the Next.js server INSIDE this container —
+      # "http://localhost:8000" there is this same container, not `api`,
+      # so every relative-path request (/api/v1/copilot/v2/*,
+      # /api/v1/graph/*, /api/v1/incidents/*, and the /api/health proxy the
+      # Dockerfile healthcheck used) failed with a connection error.
+      # INTERNAL_API_URL gives the server-side rewrite the right address.
+      INTERNAL_API_URL: http://api:8000
     depends_on:
       api:
         condition: service_healthy
@@ -275,6 +328,8 @@ volumes:
     name: indusmind_model_cache
   redis_data:
     name: indusmind_redis_data
+  neo4j_data:
+    name: indusmind_neo4j_data
 
 networks:
   indusmind_net:

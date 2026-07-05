@@ -41,6 +41,16 @@ async def lifespan(app: FastAPI):
         raise
 
     try:
+        from apps.api.seed import run_startup_seed
+        seed_db = SessionLocal()
+        try:
+            run_startup_seed(seed_db)
+        finally:
+            seed_db.close()
+    except Exception as e:
+        logger.error(f"Startup seeding failed (non-fatal): {e}")
+
+    try:
         from apps.api.weaviate_client import get_weaviate_client, ensure_schema
         wv_client = get_weaviate_client()
         ensure_schema(wv_client)
@@ -183,7 +193,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs
+from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs, graph, incidents
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
@@ -192,6 +202,8 @@ app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
+app.include_router(graph.router, prefix="/api/v1/graph", tags=["Knowledge Graph"])
+app.include_router(incidents.router, prefix="/api/v1/incidents", tags=["Incidents"])
 
 
 @app.get("/api/health", tags=["Health"])

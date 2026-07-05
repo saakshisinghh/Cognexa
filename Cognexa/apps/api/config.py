@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
 
     # OpenAI-compatible LLM
-    OPENAI_API_KEY: str = "sk-placeholder"
-    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    LLM_MODEL: str = "gpt-4o-mini"
+    OPENAI_API_KEY: str = "ollama"
+    OPENAI_BASE_URL: str = "http://host.docker.internal:11434/v1"
+    LLM_MODEL: str = "llama3.2:3b"
 
     # Embedding
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
@@ -79,9 +79,28 @@ class Settings(BaseSettings):
     TEMP_FILE_MAX_AGE_HOURS: int = 24
     FAILED_JOB_RETENTION_DAYS: int = 30
 
+    # ── Phase 3: Neo4j Knowledge Graph ───────────────────────────────────────
+    NEO4J_URI: str = "bolt://neo4j:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = "indusmind"
+    NEO4J_DATABASE: str = "neo4j"
+
+    # ── Phase 4: Claude (Anthropic) Copilot ──────────────────────────────────
+    CLAUDE_API_KEY: str = "sk-ant-placeholder"
+    CLAUDE_MODEL: str = "claude-sonnet-4-6"
+
+    # ── Startup seeding (fixes: "Admin Login" + "Default Seed Data") ────────
+    SEED_DEFAULT_ADMIN: bool = True
+    SEED_DEMO_DATA: bool = True
+    DEFAULT_ADMIN_EMAIL: str = "admin@indusmind.io"
+    DEFAULT_ADMIN_PASSWORD: str = "admin1234"
+    DEFAULT_ADMIN_NAME: str = "System Administrator"
+    DEFAULT_DEMO_PASSWORD: str = "demo1234"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # .env is shared with apps/web (e.g. NEXT_PUBLIC_API_URL)
 
 
 settings = Settings()

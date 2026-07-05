@@ -1,0 +1,21 @@
+code,label,category,description
+FM-001,Mechanical Wear,Mechanical,Gradual loss of material/function from friction or fatigue
+FM-002,Bearing Failure,Mechanical,Bearing seizure, spalling, or excessive play
+FM-003,Seal Leakage,Mechanical,Loss of containment through a seal or gasket
+FM-004,Corrosion,Material,Material degradation from chemical/electrochemical reaction
+FM-005,Overheating,Thermal,Operating temperature exceeding design limits
+FM-006,Electrical Short Circuit,Electrical,Unintended low-resistance path causing excess current
+FM-007,Insulation Breakdown,Electrical,Failure of electrical insulation under stress
+FM-008,Control System Fault,Instrumentation,Faulty sensor/PLC/control loop behavior
+FM-009,Vibration / Misalignment,Mechanical,Excessive vibration from misalignment or imbalance
+FM-010,Lubrication Failure,Mechanical,Insufficient or degraded lubrication
+FM-011,Fatigue Crack,Material,Crack propagation from cyclic loading
+FM-012,Cavitation,Hydraulic,Vapor bubble formation/collapse damaging surfaces
+FM-013,Blockage / Fouling,Process,Flow restriction from deposits or debris
+FM-014,Software / Firmware Fault,Instrumentation,Logic error in embedded control software
+FM-015,Human Error - Operation,Human Factors,Incorrect operating procedure followed
+FM-016,Human Error - Maintenance,Human Factors,Incorrect maintenance procedure followed
+FM-017,Design Deficiency,Design,Failure traceable to original design flaw
+FM-018,External Damage,External,Damage from external impact or environmental event
+FM-019,Calibration Drift,Instrumentation,Sensor/instrument output drifting from true value
+FM-020,Power Supply Failure,Electrical,Loss or instability of input power

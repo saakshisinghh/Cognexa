@@ -1,17 +1,13 @@
 """
-Celery Application — Phase 2.
+apps/api/workers/celery_app.py
 
-Production configuration covering:
-  - Redis broker + result backend (separate DB indices, see config.py)
-  - Task routing into dedicated queues
-  - Exponential-backoff retries with jitter, capped max backoff
-  - Worker concurrency / prefetch tuned for IO + CPU bound mixed workloads
-  - Soft/hard time limits so a stuck task can't wedge a worker forever
-  - Dead-letter strategy: tasks that exhaust retries are marked `failed` on the
-    ProcessingJob/TaskExecution rows (see workers/document_tasks.py on_failure)
-    instead of being silently dropped — the `failed` queue acts as the DLQ view
-    via the Processing Dashboard / Retry API rather than a separate broker queue.
-  - Graceful shutdown via Celery's own worker_shutdown signal (logged for ops).
+FIX: Added apps.api.pipelines.graph_sync to the `include` list.
+Phase 3 graph sync Celery tasks use @shared_task which means Celery must
+discover the module at startup. Without this, sync_incident_task.delay()
+raises celery.exceptions.NotRegistered at runtime.
+
+Also added a `graph` queue to beat_schedule and task_routes.
+Everything else is unchanged from Phase 2.
 """
 from __future__ import annotations
 
@@ -35,6 +31,8 @@ celery_app = Celery(
         "apps.api.workers.ocr_tasks",
         "apps.api.workers.embedding_tasks",
         "apps.api.workers.cleanup_tasks",
+        # FIX: Phase 3 graph sync tasks — must be registered here
+        "apps.api.pipelines.graph_sync",
     ],
 )
 
@@ -45,19 +43,19 @@ celery_app.conf.update(
         "apps.api.workers.embedding_tasks.*": {"queue": "embedding"},
         "apps.api.workers.document_tasks.*": {"queue": "documents"},
         "apps.api.workers.cleanup_tasks.*": {"queue": "cleanup"},
+        # FIX: graph tasks routed to their own queue
+        "graph.*": {"queue": "graph"},
     },
-    task_queues=None,  # let Celery auto-create the queues referenced above
+    task_queues=None,
 
-    # Serialization
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
     timezone="UTC",
     enable_utc=True,
 
-    # Reliability
-    task_acks_late=True,                 # ack only after task completes -> safe redelivery on worker crash
-    worker_prefetch_multiplier=1,        # don't hoard tasks; fair dispatch across workers
+    task_acks_late=True,
+    worker_prefetch_multiplier=1,
     task_reject_on_worker_lost=True,
     broker_connection_retry_on_startup=True,
     broker_connection_max_retries=10,
@@ -68,18 +66,14 @@ celery_app.conf.update(
     result_expires=settings.CELERY_RESULT_EXPIRES,
     result_extended=True,
 
-    # Time limits (graceful soft limit raises SoftTimeLimitExceeded for cleanup,
-    # hard limit kills the worker process as last resort)
     task_soft_time_limit=settings.CELERY_TASK_SOFT_TIME_LIMIT,
     task_time_limit=settings.CELERY_TASK_TIME_LIMIT,
 
-    # Concurrency / priority
     worker_concurrency=settings.CELERY_WORKER_CONCURRENCY,
     task_default_priority=5,
-    worker_send_task_events=True,         # enables monitoring (flower / events)
+    worker_send_task_events=True,
     task_send_sent_event=True,
 
-    # Retries (defaults; individual tasks override via autoretry_for / retry_backoff)
     task_default_retry_delay=settings.CELERY_TASK_RETRY_BACKOFF,
 )
 
@@ -104,10 +98,13 @@ celery_app.conf.beat_schedule = {
         "task": "apps.api.workers.cleanup_tasks.record_worker_heartbeats",
         "schedule": 30.0,
     },
+    # FIX: Phase 3 — nightly similarity computation
+    "compute-asset-similarity-nightly": {
+        "task": "graph.compute_asset_similarity",
+        "schedule": 86400.0,
+    },
 }
 
-
-# ─── Monitoring / lifecycle hooks ────────────────────────────────────────────
 
 @worker_ready.connect
 def _on_worker_ready(sender=None, **kwargs):

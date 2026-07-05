@@ -5,10 +5,17 @@ from apps.api.models import UserRole
 
 
 class UserCreate(BaseModel):
+    """
+    Public self-service signup payload.
+
+    SECURITY FIX: previously accepted an arbitrary `role` field, so anyone
+    hitting POST /auth/signup could register as UserRole.admin. Public
+    signup is now hard-pinned to `engineer` in the router; only an existing
+    admin can promote a user via PATCH /auth/users/{id}/role.
+    """
     email: EmailStr
     full_name: str
     password: str
-    role: UserRole = UserRole.engineer
 
     @field_validator("password")
     @classmethod
@@ -69,3 +76,19 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v

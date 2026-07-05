@@ -8,10 +8,11 @@ import secrets
 import logging
 
 from apps.api.db import get_db
-from apps.api.models import User, RefreshToken, UserRole
+from apps.api.models import User, RefreshToken, PasswordResetToken, UserRole
 from apps.api.schemas.auth import (
     UserCreate, UserLogin, UserResponse, TokenResponse,
-    RefreshTokenRequest, PasswordChange, UserUpdate
+    RefreshTokenRequest, PasswordChange, UserUpdate,
+    ForgotPasswordRequest, ResetPasswordRequest,
 )
 from apps.api.config import settings
 from apps.api.services.audit import write_audit_log
@@ -92,11 +93,15 @@ require_engineer_or_admin = require_role(UserRole.admin, UserRole.engineer)
 def signup(payload: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
+    # SECURITY FIX: role is intentionally NOT taken from the request body —
+    # public self-service signup always creates a low-privilege Engineer
+    # account. Promotion to Admin/Viewer must go through
+    # PATCH /auth/users/{id}/role by an existing admin.
     user = User(
         email=payload.email,
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role=UserRole.engineer,
     )
     db.add(user)
     db.commit()
@@ -220,6 +225,52 @@ def list_users(
     db: Session = Depends(get_db),
 ):
     return db.query(User).offset(skip).limit(limit).all()
+
+
+@router.post("/forgot-password", status_code=202)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """
+    Fixes issue #6 (Frontend Authentication UX — 'Forgot Password' missing).
+
+    Always returns 202 regardless of whether the email exists, so this
+    endpoint can't be used to enumerate registered accounts. If the user
+    exists, a reset token is created and logged (in place of an email
+    delivery integration, which isn't configured in this environment).
+    """
+    user = db.query(User).filter(User.email == payload.email, User.is_active == True).first()
+    if user:
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        db.add(PasswordResetToken(token=token, user_id=user.id, expires_at=expires))
+        db.commit()
+        # No SMTP/email provider is configured in this environment — log the
+        # reset link so it can be picked up in dev/demo. Wire this to a real
+        # mailer (SES/SendGrid/etc.) before using in production.
+        logger.info(f"Password reset requested for {user.email}: token={token} (expires in 1h)")
+    return {"detail": "If that email is registered, a password reset link has been sent."}
+
+
+@router.post("/reset-password", status_code=204)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    rt = db.query(PasswordResetToken).filter(
+        PasswordResetToken.token == payload.token,
+        PasswordResetToken.used == False,
+    ).first()
+    if not rt or rt.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user = db.query(User).filter(User.id == rt.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.hashed_password = hash_password(payload.new_password)
+    rt.used = True
+    # Revoke all existing refresh tokens so old sessions can't outlive the
+    # password change.
+    db.query(RefreshToken).filter(RefreshToken.user_id == user.id, RefreshToken.revoked == False).update(
+        {"revoked": True}
+    )
+    db.commit()
 
 
 @router.patch("/users/{user_id}/role", response_model=UserResponse)

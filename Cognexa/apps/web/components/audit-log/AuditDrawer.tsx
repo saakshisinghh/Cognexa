@@ -56,9 +56,9 @@ export default function AuditDrawer({ log, onClose }: Props) {
               <Row label="Correlation ID" value={<span className="text-xs font-mono">{log.correlation_id}</span>} />
               {log.detail && <Row label="Detail" value={log.detail} />}
             </div>
-            {(log.old_value || log.new_value) && (
+            {(log.old_value != null || log.new_value != null) && (
               <div className="p-5 border-t border-border space-y-3">
-                {log.old_value && (
+                {log.old_value != null && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Old value</p>
                     <pre className="text-xs bg-muted/50 rounded-lg p-3 overflow-x-auto">
@@ -66,7 +66,7 @@ export default function AuditDrawer({ log, onClose }: Props) {
                     </pre>
                   </div>
                 )}
-                {log.new_value && (
+                {log.new_value != null && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">New value</p>
                     <pre className="text-xs bg-muted/50 rounded-lg p-3 overflow-x-auto">

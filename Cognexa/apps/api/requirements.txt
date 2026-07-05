@@ -32,3 +32,10 @@ httpx==0.27.0
 celery[redis]==5.4.0
 redis==5.0.7
 flower==2.0.1
+
+# ── Phase 3: Knowledge Graph (Neo4j) ────────────────────────────────────────
+neo4j==5.23.1
+asyncpg==0.29.0
+
+# ── Phase 4: Copilot  ───────────────────────────────────────────────
+openai>=2.44.0
