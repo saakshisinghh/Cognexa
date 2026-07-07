@@ -125,7 +125,7 @@ async def request_logging(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception as e:
-        logger.error(f"Unhandled error: {e}")
+        logger.exception("Unhandled error")
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     duration = round((time.time() - start) * 1000, 2)
     logger.info(f"{request.method} {request.url.path} → {response.status_code} ({duration}ms)")

@@ -25,7 +25,8 @@ import type {
   CopilotV2ChatRequest,
 } from "@/lib/types/copilot";
 
-const BASE = "/api/v1/copilot";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE = `${API_BASE}/api/v1/copilot`;
 
 function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
