@@ -1,11 +1,9 @@
 """
 apps/api/services/llm_gateway.py
-
-
 """
-
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -21,8 +19,16 @@ logger = logging.getLogger("indus_mind.llm_gateway")
 
 _MODEL = settings.LLM_MODEL  # e.g. "llama3.2:3b"
 _MAX_TOKENS = 2048
-_TIMEOUT_SECONDS = 60
+_TIMEOUT_SECONDS = 120
 _STREAM_TIMEOUT_SECONDS = 90
+
+# Phase 5 addition: Copilot (streaming) and Agents (planner/reasoner/
+# response-generator calls) now both go through this single gateway
+# against one local, single-threaded, CPU-bound Ollama model. Without
+# this, two concurrent requests race for the same model and the loser
+# times out with "No response returned." This semaphore serializes all
+# LLM calls so the second request queues instead of failing.
+_LLM_SEMAPHORE = asyncio.Semaphore(1)
 
 
 def _get_client() -> AsyncOpenAI:
@@ -48,48 +54,51 @@ async def stream_response(
         Strings in SSE format: "data: {json}\\n\\n"
         (FastAPI's StreamingResponse handles the HTTP framing.)
     """
-    client = _get_client()
-    start = time.monotonic()
-    token_count = 0
-
-    logger.info("Stream started query_id=%s model=%s", query_id, _MODEL)
-
+    await _LLM_SEMAPHORE.acquire()
     try:
-        stream = await client.chat.completions.create(
-            model=_MODEL,
-            max_tokens=_MAX_TOKENS,
-            messages=messages,
-            stream=True,
-        )
+        client = _get_client()
+        start = time.monotonic()
+        token_count = 0
 
-        async for event in stream:
-            if not event.choices:
-                continue
+        logger.info("Stream started query_id=%s model=%s", query_id, _MODEL)
 
-            choice = event.choices[0]
-            logger.info("Chunk received query_id=%s", query_id)
+        try:
+            stream = await client.chat.completions.create(
+                model=_MODEL,
+                max_tokens=_MAX_TOKENS,
+                messages=messages,
+                stream=True,
+            )
 
-            if choice.delta and choice.delta.content:
-                token_count += 1
-                yield _sse({"type": "token", "content": choice.delta.content})
+            async for event in stream:
+                if not event.choices:
+                    continue
 
-            if choice.finish_reason is not None:
-                break
+                choice = event.choices[0]
+                logger.info("Chunk received query_id=%s", query_id)
 
-        logger.info(
-            "Stream finished query_id=%s tokens=%d elapsed_ms=%.1f",
-            query_id, token_count, (time.monotonic() - start) * 1000,
-        )
+                if choice.delta and choice.delta.content:
+                    token_count += 1
+                    yield _sse({"type": "token", "content": choice.delta.content})
 
-    except Exception:
-        logger.exception("LLM STREAM FAILED query_id=%s", query_id)
-        raise
+                if choice.finish_reason is not None:
+                    break
 
-    # Emit metadata events after successful stream completion.
-    yield _sse({"type": "citations",  "citations": citations_payload})
-    yield _sse({"type": "confidence", **confidence_payload})
-    yield _sse({"type": "conflicts",  "conflicts": conflicts_payload})
-    yield _sse({"type": "done",       "query_id": str(query_id)})
+            logger.info(
+                "Stream finished query_id=%s tokens=%d elapsed_ms=%.1f",
+                query_id, token_count, (time.monotonic() - start) * 1000,
+            )
+        except Exception:
+            logger.exception("LLM STREAM FAILED query_id=%s", query_id)
+            raise
+
+        # Emit metadata events after successful stream completion.
+        yield _sse({"type": "citations",  "citations": citations_payload})
+        yield _sse({"type": "confidence", **confidence_payload})
+        yield _sse({"type": "conflicts",  "conflicts": conflicts_payload})
+        yield _sse({"type": "done",       "query_id": str(query_id)})
+    finally:
+        _LLM_SEMAPHORE.release()
 
 
 async def complete_response(
@@ -104,25 +113,24 @@ async def complete_response(
     Raises:
         LLMUnavailableError if the API call fails — caller handles this.
     """
-    client = _get_client()
-
-    try:
-        response = await client.chat.completions.create(
-            model=_MODEL,
-            max_completion_tokens=_MAX_TOKENS,
-            messages=messages,
-        )
-        answer = response.choices[0].message.content
-        if answer is None:
-            answer = ""
-        return answer, response.usage.prompt_tokens, response.usage.completion_tokens
-
-    except openai.APITimeoutError as exc:
-        raise LLMUnavailableError("LLM API timed out.") from exc
-    except openai.APIStatusError as exc:
-        raise LLMUnavailableError(f"LLM API error {exc.status_code}.") from exc
-    except Exception as exc:  # noqa: BLE001
-        raise LLMUnavailableError(str(exc)) from exc
+    async with _LLM_SEMAPHORE:
+        client = _get_client()
+        try:
+            response = await client.chat.completions.create(
+                model=_MODEL,
+                max_completion_tokens=_MAX_TOKENS,
+                messages=messages,
+            )
+            answer = response.choices[0].message.content
+            if answer is None:
+                answer = ""
+            return answer, response.usage.prompt_tokens, response.usage.completion_tokens
+        except openai.APITimeoutError as exc:
+            raise LLMUnavailableError("LLM API timed out.") from exc
+        except openai.APIStatusError as exc:
+            raise LLMUnavailableError(f"LLM API error {exc.status_code}.") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise LLMUnavailableError(str(exc)) from exc
 
 
 def _sse(payload: dict) -> str:

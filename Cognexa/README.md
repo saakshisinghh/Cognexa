@@ -224,6 +224,24 @@ All endpoints are prefixed with `/api/v1`. Full Swagger docs at `/api/docs`.
 | GET | `/assets/{id}/documents` | Linked documents |
 | GET | `/assets/{id}/stats` | Storage + processing stats |
 
+### Agents (`/agents`) — Phase 5
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/agents` | List registered agents (catalog) |
+| GET | `/agents/{agent_key}` | Agent detail |
+| PATCH | `/agents/{agent_key}` | Enable/disable agent (admin only) |
+| GET | `/agents/health` | Health check all agents |
+| GET | `/agents/{agent_key}/health` | Health check one agent |
+| POST | `/agents/{agent_key}/run` | Run agent (`stream: true` for SSE) |
+| POST | `/agents/{agent_key}/cancel/{execution_id}` | Request cancellation |
+| GET | `/agents/executions` | Execution history (filterable by agent/status) |
+| GET | `/agents/executions/{execution_id}` | Execution detail (plan, answer, confidence, sources) |
+| GET | `/agents/executions/{execution_id}/logs` | Raw execution step log |
+| POST | `/agents/workflows` | Run a multi-agent workflow (sequential/parallel/supervisor) |
+| GET | `/agents/workflows/{workflow_id}` | Workflow detail |
+
+See [`docs/architecture/phase5-agentic-platform.md`](docs/architecture/phase5-agentic-platform.md) for the full agent architecture, execution flow, and tool system.
+
 ---
 
 ## Using with Ollama (Local LLM)
@@ -290,11 +308,11 @@ docker compose -f docker-compose.yml up -d --build
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| **P1 MVP** | Document upload, OCR, embedding, semantic search, RAG copilot, assets, auth | ✅ **This release** |
-| P2 Production | Celery workers, Redis queue, audit log | Planned |
-| P3 Knowledge Graph | Neo4j entity graph, graph queries | Planned |
-| P4 Copilot+ | Cross-encoder reranking, enhanced prompts | Planned |
-| P5 Agents | LangGraph RCA/maintenance/compliance agents | Planned |
+| **P1 MVP** | Document upload, OCR, embedding, semantic search, RAG copilot, assets, auth | ✅ Complete |
+| **P2 Production** | Celery workers, Redis queue, audit log | ✅ Complete |
+| **P3 Knowledge Graph** | Neo4j entity graph, graph queries | ✅ Complete |
+| **P4 Copilot+** | Cross-encoder reranking, enhanced prompts, confidence scoring | ✅ Complete |
+| **P5 Agents** | LangGraph RCA/maintenance/compliance/lessons agents, multi-agent workflows | ✅ **This release** |
 | P6 Memory | Temporal memory, knowledge decay, time machine | Planned |
 | P7 Enterprise | Microservices, Kubernetes, Kafka, Terraform | Future |
 

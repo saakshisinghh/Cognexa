@@ -279,3 +279,122 @@ export interface DashboardStats {
     updated_at: string;
   }>;
 }
+
+// ─── Phase 5: Agentic AI Platform ───────────────────────────────────────────
+
+export interface ToolDescriptor {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  sensitive: boolean;
+}
+
+export interface AgentDescriptor {
+  agent_key: string;
+  name: string;
+  description: string;
+  version: string;
+  capabilities: string[];
+  is_enabled: boolean;
+  health_status: string;
+}
+
+export interface ConfidenceFactors {
+  supporting_document_count?: number;
+  avg_retrieval_score?: number;
+  graph_consistency_score?: number;
+  citation_count?: number;
+  avg_trust_score?: number;
+  has_conflict?: boolean;
+  conflict_penalty_applied?: number;
+}
+
+export interface AgentConfidence {
+  level: "high" | "medium" | "low" | string;
+  raw_score: number;
+  factors: ConfidenceFactors;
+  explanation: string;
+}
+
+export interface ExecutionStep {
+  step: string;
+  status: "started" | "completed" | "failed" | "retried" | string;
+  detail: string;
+  timestamp: string;
+  duration_ms: number | null;
+}
+
+export type AgentExecutionStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type AgentExecutionMode = "single" | "sequential" | "parallel" | "supervisor";
+
+export interface ExecutionSummary {
+  execution_id: string;
+  agent_key: string;
+  goal: string;
+  status: AgentExecutionStatus;
+  mode: AgentExecutionMode;
+  workflow_id: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  confidence: AgentConfidence | null;
+}
+
+export interface ExecutionDetail extends ExecutionSummary {
+  plan: Record<string, unknown> | null;
+  answer: string | null;
+  structured_output: Record<string, unknown> | null;
+  sources: Array<Record<string, unknown>>;
+  errors: Array<Record<string, unknown>>;
+  steps: ExecutionStep[];
+}
+
+export interface WorkflowStep {
+  agent_key: string;
+  execution_id: string;
+  status: AgentExecutionStatus;
+  answer: string | null;
+  confidence: AgentConfidence | null;
+}
+
+export interface WorkflowDetail {
+  workflow_id: string;
+  goal: string;
+  mode: AgentExecutionMode;
+  status: AgentExecutionStatus;
+  agent_keys: string[];
+  steps: WorkflowStep[];
+  final_answer: string | null;
+  conflicts: Array<{ agents: string[]; issue: string }>;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface StreamNodeEvent {
+  type: "node";
+  node: string;
+  output: {
+    execution_history?: ExecutionStep[];
+    reasoning?: Array<{ step: string; thought: string; timestamp: string }>;
+    answer?: string;
+    confidence?: AgentConfidence;
+    structured_output?: Record<string, unknown>;
+    current_step?: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface StreamDoneEvent {
+  type: "done";
+  execution_id: string;
+  status: string;
+}
+
+export interface StreamErrorEvent {
+  type: "error";
+  execution_id?: string;
+  message: string;
+}
+
+export type AgentStreamEvent = StreamNodeEvent | StreamDoneEvent | StreamErrorEvent;

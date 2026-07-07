@@ -33,7 +33,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "003_create_query_history"
-down_revision = "p3_001_create_incidents"
+down_revision = None
 branch_labels = None
 depends_on = None
 
@@ -98,7 +98,7 @@ def downgrade() -> None:
 # ---------------------------------------------------------------------------
 # REQUIRED ONE-LINE EDIT in migrations/versions/conversation_sessions.py:
 #
-#   down_revision = "p3_001_create_incidents"
+#   down_revision = None
 #
 # must become:
 #

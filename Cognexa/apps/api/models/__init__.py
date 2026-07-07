@@ -177,3 +177,9 @@ from apps.api.models.audit_log import (
     TaskExecution, TaskState,
     TaskMetrics, WorkerStatus, QueueStatistics,
 )
+
+# ─── Phase 5: Agentic AI Platform ─────────────────────────────────────────────
+from apps.api.models.agent import (
+    AgentDefinition, AgentExecution, AgentExecutionStep, AgentWorkflow,
+    AgentExecutionMode, AgentExecutionStatus,
+)

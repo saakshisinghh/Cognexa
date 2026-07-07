@@ -9,7 +9,7 @@ import { useAuthStore } from "@/store/auth";
 import toast from "react-hot-toast";
 import {
   LayoutDashboard, FileText, Search, MessageSquare, Factory,
-  Settings, LogOut, Zap, ChevronRight, User, Activity, ShieldCheck, X
+  Settings, LogOut, Zap, ChevronRight, User, Activity, ShieldCheck, X, Bot
 } from "lucide-react";
 
 const nav = [
@@ -17,6 +17,7 @@ const nav = [
   { href: "/documents", icon: FileText, label: "Documents" },
   { href: "/search", icon: Search, label: "Search" },
   { href: "/copilot", icon: MessageSquare, label: "Copilot" },
+  { href: "/agents", icon: Bot, label: "Agents" },
   { href: "/assets", icon: Factory, label: "Assets" },
 ];
 

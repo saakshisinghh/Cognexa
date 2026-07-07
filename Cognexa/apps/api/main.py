@@ -41,6 +41,17 @@ async def lifespan(app: FastAPI):
         raise
 
     try:
+        from apps.api.services.agent_registry import sync_agent_definitions
+        registry_db = SessionLocal()
+        try:
+            sync_agent_definitions(registry_db)
+            logger.info("Phase 5 agent registry synced")
+        finally:
+            registry_db.close()
+    except Exception as e:
+        logger.warning(f"Agent registry sync failed (non-fatal): {e}")
+
+    try:
         from apps.api.seed import run_startup_seed
         seed_db = SessionLocal()
         try:
@@ -193,7 +204,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs, graph, incidents
+from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs, graph, incidents, agents
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
@@ -204,6 +215,7 @@ app.include_router(audit.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(graph.router, prefix="/api/v1/graph", tags=["Knowledge Graph"])
 app.include_router(incidents.router, prefix="/api/v1/incidents", tags=["Incidents"])
+app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
 
 
 @app.get("/api/health", tags=["Health"])

@@ -39,3 +39,6 @@ asyncpg==0.29.0
 
 # ── Phase 4: Copilot  ───────────────────────────────────────────────
 openai>=2.44.0
+# ── Phase 5: Agentic AI Platform (LangGraph agents) ─────────────────────────
+langgraph==1.2.7
+langchain-core==1.4.8

@@ -44,6 +44,12 @@ class AuditAction(str, enum.Enum):
     reprocess = "reprocess"
     retry_task = "retry_task"
     cancel_task = "cancel_task"
+    # ─ Phase 5: Agentic AI Platform ─
+    agent_execute = "agent_execute"
+    agent_cancel = "agent_cancel"
+    agent_enable = "agent_enable"
+    agent_disable = "agent_disable"
+    workflow_execute = "workflow_execute"
 
 
 class AuditStatus(str, enum.Enum):
