@@ -22,8 +22,8 @@ GET    /api/v1/agents/executions                List execution history (filterab
 GET    /api/v1/agents/executions/{execution_id}  Execution detail
 GET    /api/v1/agents/executions/{execution_id}/logs  Execution logs/timeline
 
-POST   /api/v1/agents/workflows                  Run a multi-agent workflow
-GET    /api/v1/agents/workflows/{workflow_id}    Workflow detail
+POST   /api/v1/agents/workflows                  Start a multi-agent workflow (returns immediately)
+GET    /api/v1/agents/workflows/{workflow_id}    Workflow detail (poll while queued/running)
 
 IMPORTANT — route registration order:
 Starlette/FastAPI matches routes in the order they're added. Any route
@@ -35,6 +35,16 @@ git history / chat log for the "GET /agents/executions always 404s"
 incident). Routes with additional segments (e.g. "/executions/{id}",
 "/workflows/{id}") are NOT affected, since their shape differs from
 "/{agent_key}" and Starlette disambiguates by segment count.
+
+IMPORTANT — POST /workflows is now fire-and-poll, not fire-and-wait:
+A multi-agent workflow can involve several agents each making multiple LLM
+calls, plus two more LLM calls afterward (conflict detection + final-answer
+synthesis). That routinely exceeds the frontend's 30s axios timeout, so this
+endpoint no longer awaits the full run inline. It validates the request and
+persists a `queued` AgentWorkflow row synchronously (fast), schedules the
+actual execution on FastAPI's BackgroundTasks, and returns immediately. The
+frontend's workflow detail page polls GET /workflows/{id} until the status
+is no longer queued/running.
 """
 from __future__ import annotations
 
@@ -42,7 +52,7 @@ import json
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -188,18 +198,32 @@ def _workflow_detail(db: Session, workflow_id: str) -> WorkflowDetail:
 
 
 @router.post("/workflows", response_model=WorkflowDetail)
-async def run_workflow(
-    payload: RunWorkflowRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+def run_workflow(
+    payload: RunWorkflowRequest, background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
 ):
+    """
+    Validates + persists the workflow row synchronously (fast: no LLM/agent
+    calls happen here), then hands the actual multi-agent run to
+    BackgroundTasks so it executes AFTER this response is sent. Returns the
+    `queued` workflow immediately — the frontend polls GET /workflows/{id}
+    until it reaches a terminal status.
+    """
     if payload.mode not in ("sequential", "parallel", "supervisor"):
         raise HTTPException(400, "mode must be one of: sequential, parallel, supervisor")
+
     try:
-        workflow = await workflow_engine.run_workflow(
+        workflow = workflow_engine.validate_and_create_workflow(
             db, goal=payload.goal, agent_keys=payload.agent_keys, mode=payload.mode,
             context=payload.context, current_user=current_user,
         )
     except agent_executor.AgentNotFoundError as exc:
         raise HTTPException(400, str(exc))
+
+    background_tasks.add_task(
+        workflow_engine.execute_workflow_background, workflow.id, getattr(current_user, "id", None),
+    )
+
     return _workflow_detail(db, workflow.id)
 
 

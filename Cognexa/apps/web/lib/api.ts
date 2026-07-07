@@ -5,7 +5,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export const api: AxiosInstance = axios.create({
   baseURL: `${API_BASE}/api/v1`,
   headers: { "Content-Type": "application/json" },
-  timeout: 30000,
+  timeout: 120000,
 });
 
 // ─── Request interceptor: attach access token ─────────────────────────────────
