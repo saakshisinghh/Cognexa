@@ -45,6 +45,10 @@ export interface Document {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+  // Phase 6: Temporal Knowledge Intelligence
+  is_stale?: boolean;
+  stale_flagged_at?: string | null;
+  stale_reason?: string | null;
 }
 
 export interface DocumentDetail extends Document {
@@ -280,14 +284,17 @@ export interface DashboardStats {
   }>;
 }
 
-// ─── Phase 5: Agentic AI Platform ───────────────────────────────────────────
+// ─── Phase 5: Agents / Multi-Agent Workflow ────────────────────────────────
+// FIX: this whole section was dropped when the Phase 6 (Knowledge
+// Intelligence) fields above were merged in — apps/api/schemas/agents.py
+// and every apps/web/components/agents/*.tsx file still expect these,
+// which is why the build failed with "Module '@/types' has no exported
+// member 'AgentDescriptor'" etc. Field names/shapes mirror
+// apps/api/schemas/agents.py and apps/api/agents/state.py exactly.
 
-export interface ToolDescriptor {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-  sensitive: boolean;
-}
+export type AgentExecutionMode = "single" | "sequential" | "parallel" | "supervisor";
+
+export type AgentExecutionStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export interface AgentDescriptor {
   agent_key: string;
@@ -299,33 +306,25 @@ export interface AgentDescriptor {
   health_status: string;
 }
 
-export interface ConfidenceFactors {
-  supporting_document_count?: number;
-  avg_retrieval_score?: number;
-  graph_consistency_score?: number;
-  citation_count?: number;
-  avg_trust_score?: number;
-  has_conflict?: boolean;
-  conflict_penalty_applied?: number;
-}
-
 export interface AgentConfidence {
   level: "high" | "medium" | "low" | string;
   raw_score: number;
-  factors: ConfidenceFactors;
+  factors: {
+    avg_trust_score?: number;
+    has_conflict?: boolean;
+    conflict_penalty_applied?: number;
+    [key: string]: unknown;
+  };
   explanation: string;
 }
 
 export interface ExecutionStep {
   step: string;
-  status: "started" | "completed" | "failed" | "retried" | string;
+  status: string;
   detail: string;
   timestamp: string;
-  duration_ms: number | null;
+  duration_ms?: number | null;
 }
-
-export type AgentExecutionStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type AgentExecutionMode = "single" | "sequential" | "parallel" | "supervisor";
 
 export interface ExecutionSummary {
   execution_id: string;
@@ -333,20 +332,20 @@ export interface ExecutionSummary {
   goal: string;
   status: AgentExecutionStatus;
   mode: AgentExecutionMode;
-  workflow_id: string | null;
+  workflow_id?: string | null;
   created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  duration_ms: number | null;
-  confidence: AgentConfidence | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+  confidence?: AgentConfidence | null;
 }
 
 export interface ExecutionDetail extends ExecutionSummary {
-  plan: Record<string, unknown> | null;
-  answer: string | null;
-  structured_output: Record<string, unknown> | null;
-  sources: Array<Record<string, unknown>>;
-  errors: Array<Record<string, unknown>>;
+  plan?: Record<string, unknown> | null;
+  answer?: string | null;
+  structured_output?: Record<string, unknown> | null;
+  sources: Record<string, unknown>[];
+  errors: Record<string, unknown>[];
   steps: ExecutionStep[];
 }
 
@@ -354,8 +353,14 @@ export interface WorkflowStep {
   agent_key: string;
   execution_id: string;
   status: AgentExecutionStatus;
-  answer: string | null;
-  confidence: AgentConfidence | null;
+  answer?: string | null;
+  confidence?: AgentConfidence | null;
+}
+
+export interface WorkflowConflict {
+  agents: string[];
+  issue: string;
+  [key: string]: unknown;
 }
 
 export interface WorkflowDetail {
@@ -365,36 +370,13 @@ export interface WorkflowDetail {
   status: AgentExecutionStatus;
   agent_keys: string[];
   steps: WorkflowStep[];
-  final_answer: string | null;
-  conflicts: Array<{ agents: string[]; issue: string }>;
+  final_answer?: string | null;
+  conflicts: WorkflowConflict[];
   created_at: string;
-  completed_at: string | null;
+  completed_at?: string | null;
 }
 
-export interface StreamNodeEvent {
-  type: "node";
-  node: string;
-  output: {
-    execution_history?: ExecutionStep[];
-    reasoning?: Array<{ step: string; thought: string; timestamp: string }>;
-    answer?: string;
-    confidence?: AgentConfidence;
-    structured_output?: Record<string, unknown>;
-    current_step?: string;
-    [key: string]: unknown;
-  };
-}
-
-export interface StreamDoneEvent {
-  type: "done";
-  execution_id: string;
-  status: string;
-}
-
-export interface StreamErrorEvent {
-  type: "error";
-  execution_id?: string;
-  message: string;
-}
-
-export type AgentStreamEvent = StreamNodeEvent | StreamDoneEvent | StreamErrorEvent;
+export type AgentStreamEvent =
+  | { type: "node"; node: string; output: Record<string, any> }
+  | { type: "done"; execution_id: string; status: string }
+  | { type: "error"; message: string };

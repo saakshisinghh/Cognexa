@@ -14,6 +14,19 @@ const nextConfig = {
   images: {
     domains: ["localhost"],
   },
+  async redirects() {
+    return [
+      {
+        // Roadmap doc calls this "Org Memory Engine executive dashboard"
+        // at app/memory/ — we built it at app/knowledge/ instead (same
+        // page, clearer name for what it actually shows). Redirect
+        // rather than duplicate the page, so either URL works.
+        source: "/memory",
+        destination: "/knowledge",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

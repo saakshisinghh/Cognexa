@@ -13,7 +13,7 @@ import type { Document, PaginatedResponse } from "@/types";
 import {
   Upload, Search, FileText, Trash2, RefreshCw, Filter,
   CheckCircle2, AlertCircle, Loader2, Clock, Eye, Tag,
-  ChevronLeft, ChevronRight, X, FolderOpen, Plus
+  ChevronLeft, ChevronRight, X, FolderOpen, Plus, AlertTriangle
 } from "lucide-react";
 
 const STATUS_CONFIG = {
@@ -74,8 +74,28 @@ export default function DocumentsPage() {
         const formData = new FormData();
         formData.append("file", file);
         try {
+          // FIX: was manually setting `headers: { "Content-Type":
+          // "multipart/form-data" }` here. When you post a FormData body,
+          // the browser MUST generate the Content-Type itself, because it
+          // needs to append a random boundary string
+          // (e.g. "multipart/form-data; boundary=----WebKitFormBoundary...")
+          // that matches the boundaries actually written into the request
+          // body. Overriding it with a plain "multipart/form-data" (no
+          // boundary) sends a header the server can't use to parse the
+          // body — FastAPI/Starlette then fails to extract the `file`
+          // field, and every upload fails. Removing the header override
+          // lets axios/the browser set it correctly.
           await api.post("/documents/upload", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
+            // EXTRA FIX: lib/api.ts's axios instance sets a default
+            // `Content-Type: application/json` header. Even without an
+            // explicit override here, that instance-level default can
+            // still leak onto this request in some axios versions,
+            // preventing axios/the browser from generating the
+            // multipart boundary. Setting it to `undefined` here forces
+            // axios to drop it and auto-detect the correct
+            // "multipart/form-data; boundary=..." header for this
+            // specific FormData request.
+            headers: { "Content-Type": undefined },
             onUploadProgress: (e) => {
               if (e.total) {
                 setUploadProgress((p) => ({ ...p, [file.name]: Math.round((e.loaded / e.total!) * 100) }));
@@ -83,7 +103,8 @@ export default function DocumentsPage() {
             },
           });
           return { name: file.name, ok: true };
-        } catch {
+        } catch (err) {
+          console.error(`Upload failed for ${file.name}:`, err);
           return { name: file.name, ok: false };
         }
       })
@@ -234,8 +255,17 @@ export default function DocumentsPage() {
                     <FileText className="w-4 h-4 text-primary" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate group-hover:text-primary transition">
+                    <p className="text-sm font-medium truncate group-hover:text-primary transition flex items-center gap-1.5">
                       {doc.original_filename}
+                      {doc.is_stale && (
+                        <span
+                          className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full shrink-0"
+                          title={doc.stale_reason ?? "This document may be outdated"}
+                        >
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          Stale
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatRelativeTime(doc.created_at)}

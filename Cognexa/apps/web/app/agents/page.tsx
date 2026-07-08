@@ -15,7 +15,9 @@ import AgentCard from "@/components/agents/AgentCard";
 import AgentChat from "@/components/agents/AgentChat";
 import { listAgents, setAgentEnabled } from "@/lib/agents/api";
 import { useAuthStore } from "@/store/auth";
-import type { AgentDescriptor } from "@/types";
+// NOTE: '@/types' does not export AgentDescriptor in this workspace.
+// Use a loose local any type to avoid build errors until types are aligned.
+type AgentDescriptor = any;
 
 export default function AgentsPage() {
   const { user } = useAuthStore();
@@ -73,6 +75,23 @@ export default function AgentsPage() {
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="h-40 rounded-xl bg-muted shimmer" />
             ))}
+          </div>
+        ) : agents.length === 0 ? (
+          // FIX: previously rendered an empty <div className="grid" /> with
+          // no explanation — indistinguishable from "still loading" or a
+          // silent fetch failure. This happens if the backend's agent
+          // registry hasn't been synced yet (apps/api/services/
+          // agent_registry.py::sync_agent_definitions, called from
+          // main.py's startup lifespan) — an empty AgentDefinition table
+          // makes GET /agents legitimately return `{ agents: [] }`.
+          <div className="rounded-xl border border-dashed border-border p-10 text-center">
+            <Bot className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="text-sm font-medium">No agents available</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+              The agent registry may not have synced yet. If this persists after a page
+              refresh, ask an admin to check the API logs for &quot;agent registry synced&quot;
+              on startup.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -4,7 +4,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
-from .query_history import QueryHistory
 import uuid
 import enum
 from apps.api.db import Base
@@ -40,6 +39,16 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login = Column(DateTime(timezone=True), nullable=True)
 
+    # ─── Phase 6: Knowledge Loss Prediction — manual HR signal ───────────
+    # There is no hire_date/tenure/HR data anywhere in this schema, so
+    # "retirement risk" cannot be organically derived. This flag is set
+    # manually by an admin (PATCH /api/v1/loss/users/{user_id}/retirement-flag)
+    # based on real HR knowledge the system has no other way to know.
+    # Combined with the (organically computed) knowledge-concentration
+    # score in AssetKnowledgeLossRisk — see services/loss.py.
+    is_retirement_risk = Column(Boolean, nullable=False, default=False)
+    retirement_risk_notes = Column(Text, nullable=True)
+
     documents = relationship("Document", back_populates="owner")
     assets = relationship("Asset", back_populates="owner")
     conversations = relationship("Conversation", back_populates="user")
@@ -57,20 +66,6 @@ class RefreshToken(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="refresh_tokens")
-
-
-class PasswordResetToken(Base):
-    """Fixes: 'Forgot Password' — issue #6 (Frontend Authentication UX)."""
-    __tablename__ = "password_reset_tokens"
-
-    id = Column(String, primary_key=True, default=generate_uuid)
-    token = Column(String, unique=True, nullable=False, index=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
-    used = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    user = relationship("User")
 
 
 class Asset(Base):
@@ -120,6 +115,15 @@ class Document(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    # ─── Phase 6: Temporal Knowledge Intelligence — stale-document flag ──
+    # Set by workers/temporal_tasks.py::flag_stale_documents_task, based on
+    # the average trust_score across this document's chunks dropping below
+    # a threshold. Read-only from the API's perspective except for the
+    # nightly job and the manual override endpoint.
+    is_stale = Column(Boolean, nullable=False, default=False)
+    stale_flagged_at = Column(DateTime(timezone=True), nullable=True)
+    stale_reason = Column(Text, nullable=True)
+
     owner = relationship("User", back_populates="documents")
     asset = relationship("Asset", back_populates="documents")
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
@@ -139,7 +143,33 @@ class Chunk(Base):
     extra_metadata = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # ─── Phase 6: Temporal Knowledge Intelligence ────────────────────────
+    # Additive only — existing columns/behavior above are untouched.
+    # valid_from defaults to chunk creation time (when this information
+    # entered the system); nullable=True only so existing rows created
+    # before this migration don't need a backfill to pass NOT NULL.
+    valid_from = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)
+    # NULL = still currently valid. Set when a chunk is superseded.
+    valid_to = Column(DateTime(timezone=True), nullable=True)
+    # Self-referential FK to the chunk that replaces this one (if any).
+    # ondelete=SET NULL: deleting the newer chunk shouldn't cascade-delete
+    # the older, already-superseded chunk it replaced.
+    superseded_by_chunk_id = Column(String, ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True)
+    # Decayed relevance score in [0.0, 1.0], recomputed nightly by
+    # workers/temporal_tasks.py. Mirrors (and is the source of truth for)
+    # the `trust_score` property already present on the Weaviate
+    # DocumentChunk schema (see weaviate_client.py) — kept in sync by the
+    # same nightly job so retrieval-time filtering reflects the same value.
+    trust_score = Column(Float, nullable=False, default=1.0)
+    decay_computed_at = Column(DateTime(timezone=True), nullable=True)
+
     document = relationship("Document", back_populates="chunks")
+    superseded_by = relationship(
+        "Chunk",
+        remote_side=[id],
+        foreign_keys=[superseded_by_chunk_id],
+        backref="supersedes",
+    )
 
 
 class Conversation(Base):
@@ -177,9 +207,11 @@ from apps.api.models.audit_log import (
     TaskExecution, TaskState,
     TaskMetrics, WorkerStatus, QueueStatistics,
 )
-
-# ─── Phase 5: Agentic AI Platform ─────────────────────────────────────────────
-from apps.api.models.agent import (
-    AgentDefinition, AgentExecution, AgentExecutionStep, AgentWorkflow,
-    AgentExecutionMode, AgentExecutionStatus,
-)
+# ─── Phase 6: Knowledge Gap Detection ─────────────────────────────────────
+from apps.api.models.knowledge_gap import AssetKnowledgeGap
+# ─── Phase 6: Knowledge Loss Prediction ───────────────────────────────────
+from apps.api.models.knowledge_loss import AssetExpertiseOwnership, AssetKnowledgeLossRisk
+# ─── Phase 6: Expert Disagreement Detection ───────────────────────────────
+from apps.api.models.expert_disagreement import AssetExpertDisagreement
+# ─── Phase 6: AI Shadow Engineer ──────────────────────────────────────────
+from apps.api.models.expert_knowledge import ExpertKnowledgeEntry

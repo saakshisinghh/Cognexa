@@ -10,10 +10,13 @@ import api from "@/lib/api";
 import AppLayout from "@/components/layout/AppLayout";
 import { formatBytes, formatDate, formatRelativeTime, cn } from "@/lib/utils";
 import type { Asset, AssetStats, PaginatedResponse, Document } from "@/types";
+import { getAssetTimeline } from "@/lib/api/timeline";
+import type { TimelineEventType } from "@/lib/types/knowledge";
 import {
   ArrowLeft, Factory, ChevronRight, MapPin, Tag, FileText,
   Activity, BarChart3, Layers, MessageSquare, CheckCircle2,
-  AlertCircle, Loader2, Clock, Edit2, Trash2, X
+  AlertCircle, Loader2, Clock, Edit2, Trash2, X,
+  AlertOctagon, Wrench, ClipboardCheck, History,
 } from "lucide-react";
 
 const HEALTH_COLORS: Record<string, string> = {
@@ -30,8 +33,24 @@ const STATUS_ICONS: Record<string, JSX.Element> = {
   pending: <Clock className="w-3.5 h-3.5 text-muted-foreground" />,
 };
 
-const TABS = ["Overview", "Documents", "Statistics"] as const;
+const TABS = ["Overview", "Documents", "Statistics", "Time-Machine"] as const;
 type Tab = (typeof TABS)[number];
+
+const EVENT_ICON: Record<TimelineEventType, typeof FileText> = {
+  incident: AlertOctagon,
+  document: FileText,
+  work_order: Wrench,
+  inspection: ClipboardCheck,
+  knowledge_superseded: History,
+};
+
+const EVENT_COLOR: Record<TimelineEventType, string> = {
+  incident: "text-red-400 bg-red-500/10",
+  document: "text-blue-400 bg-blue-500/10",
+  work_order: "text-violet-400 bg-violet-500/10",
+  inspection: "text-teal-400 bg-teal-500/10",
+  knowledge_superseded: "text-amber-400 bg-amber-500/10",
+};
 
 export default function AssetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,6 +73,12 @@ export default function AssetDetailPage() {
     queryKey: ["asset-docs", id],
     queryFn: () => api.get(`/assets/${id}/documents`).then((r) => r.data),
     enabled: activeTab === "Documents",
+  });
+
+  const { data: timeline, isLoading: timelineLoading } = useQuery({
+    queryKey: ["asset-timeline", id],
+    queryFn: () => getAssetTimeline(id),
+    enabled: activeTab === "Time-Machine",
   });
 
   const deleteMutation = useMutation({
@@ -290,6 +315,54 @@ export default function AssetDetailPage() {
               ) : (
                 <div className="col-span-3 flex items-center justify-center py-12">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          )}
+          {activeTab === "Time-Machine" && (
+            <div className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Incident, document & knowledge timeline</h3>
+                <Link href={`/time-machine`} className="text-xs text-primary hover:underline">
+                  Open full Time Machine (with replay) →
+                </Link>
+              </div>
+
+              {timelineLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : !timeline || timeline.events.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <History className="w-10 h-10 mx-auto mb-3" />
+                  <p>No timeline events for this asset yet</p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {timeline.events.map((event, i) => {
+                    const Icon = EVENT_ICON[event.event_type];
+                    return (
+                      <div key={i} className="flex gap-3 pb-6 relative">
+                        {i < timeline.events.length - 1 && (
+                          <div className="absolute left-4 top-8 bottom-0 w-px bg-border" />
+                        )}
+                        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", EVENT_COLOR[event.event_type])}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0 pt-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{event.title}</span>
+                            <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                              {formatDate(event.occurred_at)}
+                            </span>
+                          </div>
+                          {event.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{event.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

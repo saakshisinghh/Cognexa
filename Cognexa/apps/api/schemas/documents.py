@@ -26,6 +26,12 @@ class DocumentResponse(BaseModel):
     error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Phase 6: Temporal Knowledge Intelligence — set by the nightly
+    # flag_stale_documents_task; new fields, existing clients that don't
+    # read them are unaffected.
+    is_stale: bool = False
+    stale_flagged_at: Optional[datetime] = None
+    stale_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

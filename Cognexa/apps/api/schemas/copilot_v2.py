@@ -31,6 +31,12 @@ class CopilotV2ChatRequest(BaseModel):
     document_type: Optional[str] = None
     asset_id: Optional[str] = None          # FIX: str not UUID — Asset PK is String
     stream: bool = True
+    # Phase 6: AI Shadow Engineer — when set, retrieval also pulls this
+    # expert's captured knowledge (services/persona.py::get_persona_chunks)
+    # alongside normal document retrieval. Optional, defaults to None —
+    # existing callers that don't send this field get identical behavior
+    # to before this field existed.
+    persona_user_id: Optional[str] = None
 
 
 class PinAssetRequest(BaseModel):

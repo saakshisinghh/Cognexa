@@ -73,6 +73,8 @@ export interface CopilotV2ChatRequest {
   document_type?: string;
   asset_id?: string;
   stream: boolean;
+  // Phase 6: AI Shadow Engineer — optional, defaults to undefined (no persona)
+  persona_user_id?: string;
 }
 
 // SSE event shapes — discriminated union on `type`

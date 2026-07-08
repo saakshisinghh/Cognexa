@@ -1,7 +1,25 @@
 """
 apps/api/services/copilot_v2.py
 
+Phase 4 copilot orchestration service (session management, chat streaming,
+non-streaming chat, feedback).
 
+IMPORTANT: This module uses ASYNC SQLAlchemy (AsyncSession), matching the
+async engine apps/api/db.py sets up specifically for Phase 4
+(`async_engine` / `AsyncSessionLocal` / `get_async_db()` — see the
+"Phase 4: async engine" section of db.py). The Phase 4 copilot router wires
+these functions up behind `Depends(get_async_db)`, so every DB call here
+uses `await db.execute(select(...))` / `await db.flush()` / `await db.commit()`
+rather than the sync `Session.query()` API, which AsyncSession does not
+support.
+
+FIXES applied:
+  1. `QueryHistoryTable` was referenced but never defined/imported → causes
+     NameError at runtime. Fixed submit_feedback() to use raw SQL text()
+     (same pattern as _persist_query already uses).
+  2. plant_id changed to Optional[str] (not UUID) — no plants table exists.
+  3. asset_id changed to Optional[str] — Asset PK is String.
+  4. session_id in CopilotV2ChatResponse changed to str — ConversationSession PK is String.
 """
 
 from __future__ import annotations
@@ -27,6 +45,8 @@ from apps.api.schemas.retrieval import RetrievalFilters
 from apps.api.schemas.confidence import ConflictFlag
 from apps.api.services.retrieval import run_triple_retrieval, RetrievalUnavailableError
 from apps.api.services.context_assembler import assemble_context
+# Phase 6: AI Shadow Engineer
+from apps.api.services.persona import get_persona_chunks
 from apps.api.services.prompt_engine import (
     build_messages,
     check_prompt_injection,
@@ -185,6 +205,19 @@ async def handle_chat_stream(
         yield _sse({"type": "error", "message": "An error occurred while searching documents.", "query_id": str(query_id)})
         return
 
+    # Phase 6: AI Shadow Engineer — when a persona is requested, splice
+    # that expert's captured knowledge in alongside normal retrieval.
+    # Failure here must not break the answer — persona knowledge is an
+    # enhancement, not a requirement, of a working copilot response.
+    if request.persona_user_id:
+        try:
+            persona_chunks = await get_persona_chunks(
+                query=request.query, persona_user_id=request.persona_user_id, asset_id=asset_id,
+            )
+            retrieval_result.chunks = persona_chunks + retrieval_result.chunks
+        except Exception as exc:
+            logger.warning("persona_retrieval_failed persona_user_id=%s error=%s", request.persona_user_id, exc)
+
     context_str, citations = assemble_context(retrieval_result.chunks)
 
     stats = retrieval_result.source_stats
@@ -292,6 +325,16 @@ async def handle_chat_complete(
     )
 
     retrieval_result = await run_triple_retrieval(query=request.query, filters=filters)
+
+    if request.persona_user_id:
+        try:
+            persona_chunks = await get_persona_chunks(
+                query=request.query, persona_user_id=request.persona_user_id, asset_id=asset_id,
+            )
+            retrieval_result.chunks = persona_chunks + retrieval_result.chunks
+        except Exception as exc:
+            logger.warning("persona_retrieval_failed persona_user_id=%s error=%s", request.persona_user_id, exc)
+
     context_str, citations = assemble_context(retrieval_result.chunks)
 
     stats = retrieval_result.source_stats

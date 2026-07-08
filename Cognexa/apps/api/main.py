@@ -1,3 +1,4 @@
+
 """
 INDUS MIND API — FastAPI application entrypoint.
 Production-grade monolith for Phase 1 + Phase 2 (async processing & audit).
@@ -40,6 +41,24 @@ async def lifespan(app: FastAPI):
         logger.error(f"Database initialization failed: {e}")
         raise
 
+    # FIX: these two calls were dropped from main.py when Phase 6 was
+    # merged in — the files (apps/api/seed.py, apps/api/services/
+    # agent_registry.py) were never deleted, they just stopped being
+    # called. Without run_startup_seed(), the default admin login stops
+    # being created on fresh databases. Without sync_agent_definitions(),
+    # GET /api/v1/agents returns an empty list even though the agent
+    # router itself works, because it reads from the AgentDefinition table
+    # (populated here), not from the agent code directly.
+    try:
+        from apps.api.seed import run_startup_seed
+        seed_db = SessionLocal()
+        try:
+            run_startup_seed(seed_db)
+        finally:
+            seed_db.close()
+    except Exception as e:
+        logger.error(f"Startup seeding failed (non-fatal): {e}")
+
     try:
         from apps.api.services.agent_registry import sync_agent_definitions
         registry_db = SessionLocal()
@@ -52,19 +71,11 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Agent registry sync failed (non-fatal): {e}")
 
     try:
-        from apps.api.seed import run_startup_seed
-        seed_db = SessionLocal()
-        try:
-            run_startup_seed(seed_db)
-        finally:
-            seed_db.close()
-    except Exception as e:
-        logger.error(f"Startup seeding failed (non-fatal): {e}")
-
-    try:
-        from apps.api.weaviate_client import get_weaviate_client, ensure_schema
+        from apps.api.weaviate_client import get_weaviate_client, ensure_schema, ensure_expert_knowledge_schema
         wv_client = get_weaviate_client()
         ensure_schema(wv_client)
+        # Phase 6: AI Shadow Engineer — separate collection, see weaviate_client.py
+        ensure_expert_knowledge_schema(wv_client)
         logger.info("Weaviate schema initialized")
     except Exception as e:
         logger.warning(f"Weaviate initialization failed (non-fatal): {e}")
@@ -125,7 +136,7 @@ async def request_logging(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception as e:
-        logger.exception("Unhandled error")
+        logger.error(f"Unhandled error: {e}")
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     duration = round((time.time() - start) * 1000, 2)
     logger.info(f"{request.method} {request.url.path} → {response.status_code} ({duration}ms)")
@@ -204,7 +215,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs, graph, incidents, agents
+from apps.api.routers import auth, documents, search, copilot, assets, audit, jobs, graph, incidents, agents, temporal, gap, loss, disagreement, timeline, persona
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
@@ -216,6 +227,18 @@ app.include_router(jobs.router, prefix="/api/v1")
 app.include_router(graph.router, prefix="/api/v1/graph", tags=["Knowledge Graph"])
 app.include_router(incidents.router, prefix="/api/v1/incidents", tags=["Incidents"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
+# Phase 6: Temporal Knowledge Intelligence
+app.include_router(temporal.router, prefix="/api/v1")
+# Phase 6: Knowledge Gap Detection
+app.include_router(gap.router, prefix="/api/v1")
+# Phase 6: Knowledge Loss Prediction
+app.include_router(loss.router, prefix="/api/v1")
+# Phase 6: Expert Disagreement Detection
+app.include_router(disagreement.router, prefix="/api/v1")
+# Phase 6: Failure Time Machine
+app.include_router(timeline.router, prefix="/api/v1")
+# Phase 6: AI Shadow Engineer
+app.include_router(persona.router, prefix="/api/v1")
 
 
 @app.get("/api/health", tags=["Health"])

@@ -18,6 +18,7 @@
  *   - messages: ChatMessage[]  (rendered message list)
  *   - sessionId: string | null (current session)
  *   - pinnedAssetTag: string | null
+ *   - selectedPersonaId: string | null (Phase 6: AI Shadow Engineer)
  *   - isStreaming: boolean
  *   - sidebarRefreshToken: number (triggers sidebar re-fetch)
  *
@@ -42,6 +43,7 @@ import { ConversationSidebar } from "@/components/copilot/ConversationSidebar";
 import { MessageBubble } from "@/components/copilot/MessageBubble";
 import { QueryInputBar } from "@/components/copilot/QueryInputBar";
 import { AssetContextBadge } from "@/components/copilot/AssetContextBadge";
+import { PersonaSelector } from "@/components/copilot/PersonaSelector";
 
 export default function CopilotPage() {
   const router = useRouter();
@@ -52,6 +54,7 @@ export default function CopilotPage() {
   const [query, setQuery] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [pinnedAssetTag, setPinnedAssetTag] = useState<string | null>(null);
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sidebarRefreshToken, setSidebarRefreshToken] = useState(0);
 
@@ -136,6 +139,7 @@ export default function CopilotPage() {
         {
           query: trimmed,
           session_id: sessionId ?? undefined,
+          persona_user_id: selectedPersonaId ?? undefined,
           stream: true,
         },
         controller.signal
@@ -203,7 +207,13 @@ export default function CopilotPage() {
       }
       setIsStreaming(false);
     }
-  }, [query, isStreaming, sessionId]);
+    // FIX: selectedPersonaId was missing from this dependency array —
+    // handleSubmit is memoized via useCallback, so without it here the
+    // closure captured whatever persona was selected at the last time
+    // this callback was recreated (on query/isStreaming/sessionId change),
+    // not necessarily the persona selected right before submit. Adding it
+    // ensures a freshly-selected persona is always the one actually sent.
+  }, [query, isStreaming, sessionId, selectedPersonaId]);
 
   async function handleFeedback(messageId: string, feedback: "positive" | "negative") {
     // Find the query_id from the corresponding user message
@@ -264,6 +274,10 @@ export default function CopilotPage() {
                 sessionId={sessionId}
                 pinnedAssetTag={pinnedAssetTag}
                 onPinChanged={setPinnedAssetTag}
+              />
+              <PersonaSelector
+                selectedPersonaId={selectedPersonaId}
+                onSelect={setSelectedPersonaId}
               />
             </div>
 

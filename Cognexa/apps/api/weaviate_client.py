@@ -137,3 +137,49 @@ def close_weaviate_client() -> None:
 #      asset_id -> asset_ids requires reading each object's old asset_id
 #      and writing it back as a single-element list under asset_ids.
 # ---------------------------------------------------------------------------
+
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: AI Shadow Engineer — separate Weaviate collection for
+# expert-authored tacit knowledge (models/expert_knowledge.py's
+# ExpertKnowledgeEntry rows). Deliberately NOT added as properties on the
+# existing DocumentChunk collection above — persona-authored notes are a
+# different kind of content (unstructured, first-person, not sourced from
+# a PDF) and mixing them into DocumentChunk would mean every existing
+# retrieval query (bm25_retriever.py / vector_retriever.py) would need a
+# new filter to EXCLUDE them by default, which is a much larger, riskier
+# change than just giving them their own collection that only
+# services/persona.py ever queries.
+# ---------------------------------------------------------------------------
+
+EXPERT_KNOWLEDGE_CLASS = "ExpertKnowledge"
+
+
+def ensure_expert_knowledge_schema(client: "weaviate.WeaviateClient") -> None:
+    """Ensure the ExpertKnowledge collection exists in Weaviate."""
+    try:
+        if not client.collections.exists(EXPERT_KNOWLEDGE_CLASS):
+            from weaviate.classes.config import Configure, Property, DataType, VectorDistances
+            client.collections.create(
+                name=EXPERT_KNOWLEDGE_CLASS,
+                description="Expert-authored tacit knowledge entries (Phase 6 AI Shadow Engineer)",
+                vectorizer_config=Configure.Vectorizer.none(),
+                vector_index_config=Configure.VectorIndex.hnsw(
+                    distance_metric=VectorDistances.COSINE
+                ),
+                properties=[
+                    Property(name="entry_id", data_type=DataType.TEXT),       # Postgres ExpertKnowledgeEntry.id
+                    Property(name="author_user_id", data_type=DataType.TEXT),
+                    Property(name="asset_id", data_type=DataType.TEXT),
+                    Property(name="title", data_type=DataType.TEXT),
+                    Property(name="content", data_type=DataType.TEXT),
+                    Property(name="tags", data_type=DataType.TEXT_ARRAY),
+                ],
+            )
+            logger.info(f"Created Weaviate collection: {EXPERT_KNOWLEDGE_CLASS}")
+        else:
+            logger.info(f"Weaviate collection {EXPERT_KNOWLEDGE_CLASS} already exists")
+    except Exception as e:
+        logger.error(f"Failed to ensure ExpertKnowledge schema: {e}")
+        raise

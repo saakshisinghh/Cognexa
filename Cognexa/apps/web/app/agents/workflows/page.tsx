@@ -16,7 +16,8 @@ import Link from "next/link";
 import AppLayout from "@/components/layout/AppLayout";
 import { listAgents, runWorkflow } from "@/lib/agents/api";
 import { cn } from "@/lib/utils";
-import type { AgentExecutionMode } from "@/types";
+// Local type for agent execution modes (was previously imported from @/types)
+type AgentExecutionMode = "sequential" | "parallel" | "supervisor";
 
 const MODES: { key: AgentExecutionMode; label: string; description: string }[] = [
   { key: "sequential", label: "Sequential", description: "Agents run one after another, each sees prior findings." },
@@ -41,12 +42,16 @@ export default function WorkflowsPage() {
     setRunning(true);
     try {
       const workflow = await runWorkflow(goal, selectedAgents, mode);
+      console.log("WORKFLOW =", workflow);
+      console.log("workflow_id =", workflow.workflow_id);
       router.push(`/agents/workflows/${workflow.workflow_id}`);
     } catch {
       toast.error("Failed to run workflow");
       setRunning(false);
     }
   };
+
+
 
   return (
     <AppLayout>
