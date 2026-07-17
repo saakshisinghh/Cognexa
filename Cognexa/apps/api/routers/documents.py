@@ -38,6 +38,71 @@ ALLOWED_MIMES = {
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 
 
+# ─── Response builders ──────────────────────────────────────────────────────
+# FIX: list_documents / get_document / update_document used to return raw
+# SQLAlchemy Document objects and let FastAPI's response_model
+# (from_attributes=True) auto-populate DocumentResponse.metadata by reading
+# `document.metadata`. That attribute is RESERVED on every SQLAlchemy
+# declarative model (it's Base.metadata, the schema registry) — the actual
+# JSON column is mapped to `extra_metadata` specifically to avoid this
+# collision. Auto-serialization therefore tried to validate a MetaData
+# object against a `dict` field and failed Pydantic validation, so every
+# single GET /documents, GET /documents/{id}, and PATCH /documents/{id}
+# call 500'd — which the frontend's generic error handling displayed as
+# "0 documents total" / "Document not found". Building the response
+# explicitly, like apps/api/routers/assets.py already does, avoids relying
+# on FastAPI's blind attribute-name matching.
+
+def _chunk_to_response(chunk: Chunk) -> ChunkResponse:
+    return ChunkResponse(
+        id=chunk.id,
+        document_id=chunk.document_id,
+        chunk_index=chunk.chunk_index,
+        text=chunk.text,
+        page_number=chunk.page_number,
+        token_count=chunk.token_count,
+        metadata=chunk.extra_metadata or {},
+    )
+
+
+def _document_to_response(doc: Document) -> DocumentResponse:
+    return DocumentResponse(
+        id=doc.id,
+        filename=doc.filename,
+        original_filename=doc.original_filename,
+        file_size=doc.file_size,
+        mime_type=doc.mime_type,
+        version=doc.version,
+        status=doc.status,
+        ocr_status=doc.ocr_status,
+        embedding_status=doc.embedding_status,
+        chunk_count=doc.chunk_count,
+        entity_count=doc.entity_count,
+        page_count=doc.page_count,
+        language=doc.language,
+        category=doc.category,
+        tags=doc.tags or [],
+        metadata=doc.extra_metadata or {},
+        owner_id=doc.owner_id,
+        asset_id=doc.asset_id,
+        error_message=doc.error_message,
+        created_at=doc.created_at,
+        updated_at=doc.updated_at,
+        is_stale=doc.is_stale,
+        stale_flagged_at=doc.stale_flagged_at,
+        stale_reason=doc.stale_reason,
+    )
+
+
+def _document_to_detail_response(doc: Document, chunks: List[Chunk]) -> DocumentDetailResponse:
+    base = _document_to_response(doc)
+    return DocumentDetailResponse(
+        **base.model_dump(),
+        chunks=[_chunk_to_response(c) for c in chunks],
+        extracted_text=doc.extracted_text,
+    )
+
+
 # ─── MinIO Client ─────────────────────────────────────────────────────────────
 
 def get_minio_client() -> Minio:
@@ -75,7 +140,15 @@ def _process_document(document_id: str, file_bytes: bytes, mime_type: str, filen
             doc.extracted_text = result["text"]
             doc.page_count = result["page_count"]
             doc.language = result["language"]
-            doc.metadata = {**doc.metadata, **result["metadata"], "ocr_engine": result["ocr_engine"]}
+            # FIX: was `doc.metadata = {**doc.metadata, ...}` — reading/
+            # writing the reserved `metadata` attribute instead of the
+            # mapped `extra_metadata` column. Reading `doc.metadata` here
+            # returns SQLAlchemy's MetaData registry object, which isn't
+            # iterable as `**doc.metadata` — this raised a TypeError,
+            # caught below, which is why every OCR step "failed" with a
+            # cryptic error and the document never progressed past
+            # ocr_status=failed.
+            doc.extra_metadata = {**(doc.extra_metadata or {}), **result["metadata"], "ocr_engine": result["ocr_engine"]}
             doc.ocr_status = "completed"
             db.commit()
         except Exception as e:
@@ -90,7 +163,7 @@ def _process_document(document_id: str, file_bytes: bytes, mime_type: str, filen
         try:
             entities = extractor_svc.extract_entities(doc.extracted_text or "")
             doc.entity_count = len(entities)
-            doc.metadata = {**doc.metadata, "entities": entities[:50]}  # store top 50
+            doc.extra_metadata = {**(doc.extra_metadata or {}), "entities": entities[:50]}  # store top 50
             db.commit()
         except Exception as e:
             logger.warning(f"Entity extraction failed for {document_id}: {e}")
@@ -114,7 +187,20 @@ def _process_document(document_id: str, file_bytes: bytes, mime_type: str, filen
                     text=ch.text,
                     page_number=ch.page_number,
                     token_count=ch.token_count,
-                    metadata=ch.metadata,
+                    # FIX: was `metadata=ch.metadata`. Same reserved-attribute
+                    # collision as the Asset/Document bugs — `metadata` is
+                    # not a valid constructor kwarg for a SQLAlchemy
+                    # declarative model (it collides with Base.metadata).
+                    # This raised `TypeError: 'metadata' is an invalid
+                    # keyword argument for Chunk` on EVERY chunk, for EVERY
+                    # document, ever uploaded — caught by the broad
+                    # `except Exception` below, which silently marked the
+                    # document embedding_status "failed" and left
+                    # chunk_count at 0. This is almost certainly why
+                    # Copilot/retrieval kept returning "insufficient
+                    # evidence" even for documents that uploaded
+                    # successfully — no chunk ever actually got created.
+                    extra_metadata=ch.metadata,
                 )
                 db_chunks.append(db_chunk)
             db.bulk_save_objects(db_chunks)
@@ -346,7 +432,7 @@ def list_documents(
     docs = query.offset((page - 1) * page_size).limit(page_size).all()
 
     return DocumentListResponse(
-        items=docs,
+        items=[_document_to_response(d) for d in docs],
         total=total,
         page=page,
         page_size=page_size,
@@ -363,7 +449,8 @@ def get_document(
     doc = db.query(Document).filter(Document.id == document_id).first()
     if not doc:
         raise HTTPException(404, "Document not found")
-    return doc
+    chunks = db.query(Chunk).filter(Chunk.document_id == document_id).order_by(Chunk.chunk_index).all()
+    return _document_to_detail_response(doc, chunks)
 
 
 @router.patch("/{document_id}", response_model=DocumentResponse)
@@ -384,13 +471,13 @@ def update_document(
     if payload.tags is not None:
         doc.tags = payload.tags
     if payload.metadata is not None:
-        doc.metadata = {**doc.metadata, **payload.metadata}
+        doc.extra_metadata = {**(doc.extra_metadata or {}), **payload.metadata}
     if payload.asset_id is not None:
         doc.asset_id = payload.asset_id
 
     db.commit()
     db.refresh(doc)
-    return doc
+    return _document_to_response(doc)
 
 
 @router.delete("/{document_id}", status_code=204)

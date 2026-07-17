@@ -14,8 +14,15 @@ import type { TimelineEventType } from "@/lib/types/knowledge";
 
 interface AssetOption {
   id: string;
-  tag_number: string;
-  asset_name: string;
+  // FIX: was `tag_number` + `asset_name` — the Asset model
+  // (apps/api/models/__init__.py) has no `tag_number` field at all, and
+  // the name field is called `name`, not `asset_name`. Every dropdown row
+  // was rendering "undefined (undefined)" (or would have, once the
+  // `items` vs `assets` bug above was fixed). Using the real fields:
+  // `name` and `asset_type` (as a secondary descriptor in place of the
+  // tag number that doesn't exist on this model).
+  name: string;
+  asset_type: string;
 }
 
 const EVENT_ICON: Record<TimelineEventType, typeof FileText> = {
@@ -43,7 +50,13 @@ export default function TimeMachinePage() {
     queryKey: ["assets", "search", search],
     queryFn: async () => {
       const res = await api.get("/assets", { params: { page: 1, page_size: 8, search: search || undefined } });
-      return res.data.assets as AssetOption[];
+      // FIX: was `res.data.assets` — the backend's AssetListResponse
+      // (apps/api/schemas/__init__.py) returns the paginated list under
+      // `items`, not `assets`. Reading the wrong key meant this always
+      // evaluated to `undefined`, so the search dropdown could never show
+      // results — the page looked permanently empty no matter what you
+      // searched for.
+      return res.data.items as AssetOption[];
     },
     enabled: search.length > 0,
   });
@@ -73,7 +86,7 @@ export default function TimeMachinePage() {
           <div className="flex items-center gap-2 border border-border rounded-lg px-3 py-2 bg-card">
             <Search className="w-4 h-4 text-muted-foreground" />
             <input
-              value={selectedAsset ? `${selectedAsset.asset_name} (${selectedAsset.tag_number})` : search}
+              value={selectedAsset ? `${selectedAsset.name} (${selectedAsset.asset_type})` : search}
               onChange={(e) => {
                 setSelectedAsset(null);
                 setSearch(e.target.value);
@@ -93,8 +106,8 @@ export default function TimeMachinePage() {
                     }}
                     className="w-full text-left px-3 py-2 text-sm hover:bg-primary/10"
                   >
-                    <span className="font-mono text-primary font-semibold">{asset.tag_number}</span>{" "}
-                    <span className="text-muted-foreground">{asset.asset_name}</span>
+                    <span className="font-mono text-primary font-semibold">{asset.asset_type}</span>{" "}
+                    <span className="text-muted-foreground">{asset.name}</span>
                   </button>
                 </li>
               ))}

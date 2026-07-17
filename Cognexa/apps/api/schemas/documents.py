@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from typing import Optional, List, Any
 from datetime import datetime
 from apps.api.models import DocumentStatus
@@ -59,9 +59,10 @@ class ChunkResponse(BaseModel):
     text: str
     page_number: Optional[int] = None
     token_count: int
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict, validation_alias="extra_metadata")
 
-    model_config = {"from_attributes": True}
+
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class DocumentDetailResponse(DocumentResponse):

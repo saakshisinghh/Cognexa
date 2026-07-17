@@ -29,7 +29,17 @@ def _asset_to_response(asset: Asset, db: Session) -> AssetResponse:
         asset_type=asset.asset_type,
         owner_id=asset.owner_id,
         tags=asset.tags or [],
-        metadata=asset.metadata or {},
+        # FIX: was `asset.metadata` — on a SQLAlchemy declarative model,
+        # `metadata` is a RESERVED class attribute (the table's MetaData
+        # registry), not the JSON column. The column is declared as
+        # `extra_metadata = Column("metadata", JSON, ...)` specifically to
+        # avoid this collision — the Python attribute is `extra_metadata`,
+        # only the underlying DB column is named "metadata". Reading
+        # `asset.metadata` silently returned the wrong object (a MetaData
+        # instance, not the stored dict), which then failed Pydantic
+        # validation against AssetResponse.metadata: dict — causing every
+        # GET /assets response to fail serialization.
+        metadata=asset.extra_metadata or {},
         health_status=asset.health_status,
         is_active=asset.is_active,
         document_count=doc_count,
@@ -51,7 +61,14 @@ def create_asset(
         asset_type=payload.asset_type,
         owner_id=current_user.id,
         tags=payload.tags,
-        metadata=payload.metadata,
+        # FIX: was `metadata=payload.metadata` — passing `metadata` as a
+        # constructor kwarg to a SQLAlchemy declarative model raises
+        # `TypeError: 'metadata' is an invalid keyword argument for Asset`
+        # (it collides with the reserved Base.metadata attribute), so this
+        # endpoint 500'd on every single call — nothing created, ever,
+        # which is why the Assets page stayed blank even after "creating"
+        # something. The mapped attribute name is extra_metadata.
+        extra_metadata=payload.metadata,
         health_status=payload.health_status,
     )
     db.add(asset)
@@ -125,8 +142,19 @@ def update_asset(
     if not asset:
         raise HTTPException(404, "Asset not found")
 
+    # FIX: AssetUpdate has a `metadata: Optional[dict]` field, and this loop
+    # used to do a blind `setattr(asset, field, value)` for every field in
+    # the payload. `setattr(asset, "metadata", value)` shadows the
+    # SQLAlchemy-reserved `Base.metadata` class attribute at the instance
+    # level instead of touching the mapped column (which is
+    # `extra_metadata`) — so the update silently "succeeded" (no error) but
+    # never actually persisted, and every other attribute read afterward
+    # risked seeing the wrong object. Remap it explicitly.
     for field, value in payload.model_dump(exclude_none=True).items():
-        setattr(asset, field, value)
+        if field == "metadata":
+            asset.extra_metadata = value
+        else:
+            setattr(asset, field, value)
 
     db.commit()
     db.refresh(asset)

@@ -46,7 +46,7 @@ export default function SignupPage() {
       await api.post("/auth/signup", data);
       // Auto-login right after signup for a smooth first-run experience.
       await login(data.email, data.password);
-      toast.success("Account created — welcome to INDUS MIND!");
+      toast.success("Account created — welcome to Cognexa!");
       router.push("/dashboard");
     } catch (err: unknown) {
       const msg =
@@ -70,7 +70,7 @@ export default function SignupPage() {
           <div className="w-8 h-8 indus-gradient rounded-lg flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-lg">INDUS MIND</span>
+          <span className="font-bold text-lg">Cognexa</span>
         </div>
 
         <h1 className="text-2xl font-bold mb-1 text-center">Create your account</h1>

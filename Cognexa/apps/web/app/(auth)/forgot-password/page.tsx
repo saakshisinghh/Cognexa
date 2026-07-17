@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
           <div className="w-8 h-8 indus-gradient rounded-lg flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-lg">INDUS MIND</span>
+          <span className="font-bold text-lg">Cognexa</span>
         </div>
 
         {submitted ? (

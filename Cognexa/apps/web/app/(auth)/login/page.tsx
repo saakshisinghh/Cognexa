@@ -65,7 +65,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
               <Zap className="w-6 h-6 text-white" />
             </div>
-            <span className="text-white font-bold text-xl tracking-tight">INDUS MIND</span>
+            <span className="text-white font-bold text-xl tracking-tight">Cognexa</span>
           </div>
           <p className="text-indus-200 text-sm">The Operating Memory of Industrial Enterprises</p>
         </div>
@@ -91,7 +91,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-indus-300 text-xs">
-          © {new Date().getFullYear()} INDUS MIND. Enterprise AI Platform.
+          © {new Date().getFullYear()} Cognexa. Enterprise AI Platform.
         </p>
       </motion.div>
 
@@ -107,7 +107,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 indus-gradient rounded-lg flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg">INDUS MIND</span>
+            <span className="font-bold text-lg">Cognexa</span>
           </div>
 
           <h1 className="text-2xl font-bold mb-1">Sign in to your account</h1>

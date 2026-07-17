@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Zap className="w-4 h-4 text-white" />
             </div>
             <div>
-              <p className="font-bold text-sm leading-none">INDUS MIND</p>
+              <p className="font-bold text-sm leading-none">Cognexa</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 leading-none">Industrial AI Platform</p>
             </div>
           </Link>
