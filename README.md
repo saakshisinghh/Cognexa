@@ -289,9 +289,19 @@ https://drive.google.com/file/d/1x3wUcAVs0rrLH6pMA44kw0itITpmjzG8/view?usp=shari
 
 ------------------------------------------------------------------------
 
+------------------------------------------------------------------------
+
+# 🏆 ET AI Hackathon 2.0
+
+::: {align="center"}
+### 🚀 Built for **ET AI Hackathon 2.0**
+
+## 👨‍💻 Team: **BYTEBADDIES**
+
+*"Innovating with AI to transform industrial knowledge into enterprise
+intelligence."*
+------------------------------------------------------------------------
 # 🧠 COGNEXA
 
 ### **Turning Industrial Documents into Enterprise Intelligence**
 
-⭐ **If you found this project useful, consider giving it a Star!**
-:::
