@@ -300,8 +300,12 @@ https://drive.google.com/file/d/1x3wUcAVs0rrLH6pMA44kw0itITpmjzG8/view?usp=shari
 
 *"Innovating with AI to transform industrial knowledge into enterprise
 intelligence."*
-------------------------------------------------------------------------
+:::
+---------------------------------------------------------------
+
+::: {align="center"}
 # 🧠 COGNEXA
 
 ### **Turning Industrial Documents into Enterprise Intelligence**
 
+:::
